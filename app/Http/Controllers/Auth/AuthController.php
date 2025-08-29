@@ -92,4 +92,22 @@ class AuthController extends Controller
             return $this->error('Login Failed: ' . $e->getMessage(), 500);
         }
     }
+
+    public function profile(Request $request) {
+        $user = $request->user();
+
+        return $this->success([
+            'user' => $user,
+            'role' => $user->roles()->pluck('slug')->first()
+        ], 'Get Profile Successfully');
+    }
+
+    public function logout(Request $request) {
+        $user = $request->user();
+
+        //Hapus token
+        $user->currentAccessToken()->delete();
+
+        return $this->success([], 'Logout Successfully');
+    }
 }
