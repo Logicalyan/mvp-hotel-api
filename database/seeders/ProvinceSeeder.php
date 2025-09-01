@@ -19,7 +19,7 @@ class ProvinceSeeder extends Seeder
         foreach ($datas as $data) {
             DB::table('provinces')->insert([
                 'id'=> $data['id'],
-                'name' => $data['name']
+                'name' => $data['nama']
             ]);
         }
     }
