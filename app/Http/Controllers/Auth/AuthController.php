@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -46,6 +48,8 @@ class AuthController extends Controller
             )->plainTextToken;
 
             DB::commit();
+
+            event(new Registered($user));
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->error('Registration Failed: ' . $e->getMessage(), 500);
@@ -56,7 +60,7 @@ class AuthController extends Controller
             'role' => $user->roles()->pluck('slug')->first(),
             'token' => $token,
             'device' => $deviceName
-        ], 'Register Successfully', 201);
+        ], 'Register Successfully. Check your email', 201);
     }
 
     public function login(Request $request) {
@@ -109,5 +113,11 @@ class AuthController extends Controller
         $user->currentAccessToken()->delete();
 
         return $this->success([], 'Logout Successfully');
+    }
+
+    public function verifyEmail(EmailVerificationRequest $request){
+        $request->fulfill();
+
+        return $this->success([],'Verification Success');
     }
 }
