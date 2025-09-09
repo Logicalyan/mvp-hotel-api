@@ -12,4 +12,4 @@ Route::controller(AuthController::class)->group(function () {
     Route::post('/logout', 'logout')->middleware('auth:sanctum');
 });
 
-Route::get('/users',[UserController::class, "index"]);
+Route::resource('users', UserController::class);
