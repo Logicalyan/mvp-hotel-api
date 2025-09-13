@@ -35,10 +35,8 @@ class AuthController extends Controller
             $role = Role::where('slug', 'customer')->first();
             $role && $user->roles()->attach($role->id);
 
-            //Device
             $deviceName = $request->header('User-Agent') ?? 'unknown device';
 
-            //Buat token
             $token = $user->createToken(
                 $deviceName,
                 ['*'],
@@ -72,10 +70,8 @@ class AuthController extends Controller
         }
 
         try {
-            //Device
             $deviceName = $request->header('User-Agent') ?? 'unknown device';
 
-            //Buat token
             $token = $user->createToken(
                 $deviceName,
                 ['*'],
@@ -105,7 +101,6 @@ class AuthController extends Controller
     public function logout(Request $request) {
         $user = $request->user();
 
-        //Hapus token
         $user->currentAccessToken()->delete();
 
         return $this->success([], 'Logout Successfully');
