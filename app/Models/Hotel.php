@@ -22,14 +22,17 @@ class Hotel extends Model
     {
         return $this->belongsTo(SubDistrict::class);
     }
+
     public function district()
     {
         return $this->belongsTo(District::class);
     }
+
     public function city()
     {
         return $this->belongsTo(City::class);
     }
+
     public function province()
     {
         return $this->belongsTo(Province::class);
@@ -39,8 +42,10 @@ class Hotel extends Model
     {
         return $this->hasMany(HotelImage::class);
     }
-    public function facilities()    
+
+    public function facilities()
     {
-        return $this->hasMany(HotelFacility::class);
+        return $this->belongsToMany(Facility::class, 'hotel_facilities');
     }
+
 }

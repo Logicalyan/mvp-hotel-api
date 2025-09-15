@@ -6,7 +6,6 @@ use App\ApiResponses;
 use App\Filters\UserFilter;
 use App\Models\Role;
 use App\Models\User;
-use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
@@ -33,7 +32,7 @@ class UserController extends Controller
         return $this->success($user, "User found successfully", 200);
     }
 
-    public function store(UserFilter $filters)
+    public function store()
     {
         $user = User::create([
             'name' => request('name'),

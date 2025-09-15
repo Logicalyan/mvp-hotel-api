@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Data\Hotel;
 use App\ApiResponses;
 use App\Filters\HotelFilter;
 use App\Http\Controllers\Controller;
+use App\Models\Facility;
 use App\Models\Hotel;
 use Illuminate\Http\Request;
 
@@ -44,9 +45,18 @@ class HotelController extends Controller
         }
 
         if ($request->has("facilities")) {
+            $facilityIds = [];
+
             foreach ($request->facilities as $facility) {
-                $hotel->facilities()->create(["name" => $facility]);
+                if (is_numeric($facility)) {
+                    $facilityIds[] = $facility;
+                } else {
+                    $newFacility = Facility::firstOrCreate(['name' => $facility]);
+                    $facilityIds[] = $newFacility->id;
+                }
             }
+
+            $hotel->facilities()->sync($facilityIds);
         }
 
         $hotel->load(["images", "facilities"]);
@@ -56,7 +66,8 @@ class HotelController extends Controller
 
     public function index(HotelFilter $filters)
     {
-        $query = $filters->apply(Hotel::query()->with(['images', 'facilities']));
+        $query = $filters->apply(Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict']));
+
         $hotels = $query->paginate(10);
 
         return $this->success($hotels, "Hotel list success", 200);
@@ -73,7 +84,6 @@ class HotelController extends Controller
 
         return $this->success($hotel, "Hotel found successfully", 200);
     }
-
 
     public function update(Request $request, $id)
     {

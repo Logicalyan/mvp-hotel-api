@@ -63,11 +63,15 @@ class HotelFilter
         return $this->builder->where('province_id', $value);
     }
 
-    public function facility(string $value): Builder
+    public function facilities($facilityIds): Builder
     {
-        return $this->builder->whereHas('facilities', function ($q) use ($value) {
-            $q->where('name', $value);
-        });
+        if (is_string($facilityIds)) {
+            $facilityIds = explode(',', $facilityIds);
+        }
+
+        return $this->builder->whereHas('facilities', function ($q) use ($facilityIds) {
+            $q->whereIn('facilities.id', $facilityIds);
+        }, '=', count($facilityIds));
     }
 
     public function sort(string $value): Builder
