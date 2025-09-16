@@ -9,6 +9,7 @@ use App\Filters\HotelFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Storage;
 
 class HotelController extends Controller
 {
@@ -66,31 +67,30 @@ class HotelController extends Controller
             }
         }
 
-
         $hotel->load(["images", "facilities"]);
 
         return $this->success($hotel, "Hotel created successfully", 201);
     }
 
-public function index(HotelFilter $filters)
-{
-
-    $baseQuery = Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict']);
-
-    $query = $filters->apply($baseQuery);
-
-    $perPage = request()->get('per_page', 10);
-    $perPage = min(max((int) $perPage, 1), 100);
-
-    $hotels = $query->paginate($perPage);
-
-
-    return $this->success($hotels, "Hotel list success", 200);
-}
-
-    public function show(HotelFilter $filters, $id)
+    public function index(HotelFilter $filters)
     {
-        $query = $filters->apply(Hotel::where("id", $id)->with(['images', 'facilities']));
+
+        $baseQuery = Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict']);
+
+        $query = $filters->apply($baseQuery);
+
+        $perPage = request()->get('per_page', 10);
+        $perPage = min(max((int) $perPage, 1), 100);
+
+        $hotels = $query->paginate($perPage);
+
+
+        return $this->success($hotels, "Hotel list success", 200);
+    }
+
+    public function show($id)
+    {
+        $query = Hotel::where("id", $id)->with(['images', 'facilities']);
         $hotel = $query->first();
 
         if (!$hotel) {
@@ -118,17 +118,30 @@ public function index(HotelFilter $filters)
             "province_id" => "sometimes|exists:provinces,id",
             "phone_number" => "sometimes|numeric|digits_between:10,13",
             "email" => "sometimes|string|max:255",
-            "images" => "sometimes|array",
+            "images" => "nullable|array",
             "images.*" => "image|mimes:jpg,jpeg,png|max:5120",
             "facilities" => "sometimes|array",
-            "facilities.*" => "string|max:20"
+            "facilities.*" => "string|max:50",
+            "remove_images" => "sometimes|array",
+            "remove_images.*" => "integer|exists:hotel_images,id",
         ]);
 
-        $hotel->update($validate);
+        // exclude facilities & images dari update
+        $hotelData = collect($validate)->except(['images', 'facilities'])->toArray();
+        $hotel->update($hotelData);
 
+        // 🚨 Remove selected images
+        if ($request->filled("remove_images")) {
+            $images = $hotel->images()->whereIn("id", $request->remove_images)->get();
+            foreach ($images as $image) {
+                // hapus file dari storage
+                Storage::disk("public")->delete($image->image_url);
+                $image->delete();
+            }
+        }
+
+        // 🚨 Add new images
         if ($request->hasFile("images")) {
-            $hotel->images()->delete();
-
             foreach ($request->file("images") as $image) {
                 $fileName = time() . "_" . $image->getClientOriginalName();
                 $path = $image->storeAs("hotels", $fileName, "public");
@@ -136,18 +149,30 @@ public function index(HotelFilter $filters)
             }
         }
 
+        // update facilities
         if ($request->has("facilities")) {
-            $hotel->facilities()->delete();
+            $facilityIds = [];
 
             foreach ($request->facilities as $facility) {
-                $hotel->facilities()->create(["name" => $facility]);
+                if (is_numeric($facility)) {
+                    $exists = Facility::find($facility);
+                    if ($exists) {
+                        $facilityIds[] = $exists->id;
+                    }
+                } else {
+                    $newFacility = Facility::firstOrCreate(['name' => $facility]);
+                    $facilityIds[] = $newFacility->id;
+                }
             }
+
+            $hotel->facilities()->sync($facilityIds);
         }
 
         $hotel->load(["images", "facilities"]);
 
         return $this->success($hotel, "Hotel updated successfully", 200);
     }
+
 
     public function destroy($id)
     {
