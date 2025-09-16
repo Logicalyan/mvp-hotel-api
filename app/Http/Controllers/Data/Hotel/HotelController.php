@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Data\Hotel;
 
 use App\ApiResponses;
 use App\Models\Hotel;
-use App\Models\Facility;
+use App\Models\HotelFacility;
 use App\Filters\HotelFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -52,12 +52,12 @@ class HotelController extends Controller
 
             foreach ($request->facilities as $facility) {
                 if (is_numeric($facility)) {
-                    $exists = Facility::find($facility);
+                    $exists = HotelFacility::find($facility);
                     if ($exists) {
                         $facilityIds[] = $exists->id;
                     }
                 } else {
-                    $newFacility = Facility::firstOrCreate(['name' => $facility]);
+                    $newFacility = HotelFacility::firstOrCreate(['name' => $facility]);
                     $facilityIds[] = $newFacility->id;
                 }
             }
@@ -155,12 +155,12 @@ class HotelController extends Controller
 
             foreach ($request->facilities as $facility) {
                 if (is_numeric($facility)) {
-                    $exists = Facility::find($facility);
+                    $exists = HotelFacility::find($facility);
                     if ($exists) {
                         $facilityIds[] = $exists->id;
                     }
                 } else {
-                    $newFacility = Facility::firstOrCreate(['name' => $facility]);
+                    $newFacility = HotelFacility::firstOrCreate(['name' => $facility]);
                     $facilityIds[] = $newFacility->id;
                 }
             }

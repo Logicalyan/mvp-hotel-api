@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Models\Facility;
+use App\Models\HotelFacility;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class FacilitySeeder extends Seeder
+class HotelFacilitySeeder extends Seeder
 {
     /**
      * Run the database seeds.
@@ -27,7 +27,7 @@ class FacilitySeeder extends Seeder
         ];
 
         foreach ($facilities as $facility) {
-            Facility::firstOrCreate(['name' => $facility]);
+            HotelFacility::firstOrCreate(['name' => $facility]);
         }
     }
 }

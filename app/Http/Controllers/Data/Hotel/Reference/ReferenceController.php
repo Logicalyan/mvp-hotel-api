@@ -8,7 +8,7 @@ use App\Models\Province;
 use App\Models\City;
 use App\Models\District;
 use App\Models\SubDistrict;
-use App\Models\Facility;
+use App\Models\HotelFacility;
 use Illuminate\Http\Request;
 
 class ReferenceController extends Controller
@@ -67,7 +67,7 @@ class ReferenceController extends Controller
 
     public function facilities()
     {
-        $facilities = Facility::select('id', 'name')
+        $facilities = HotelFacility::select('id', 'name')
             ->orderBy('name')
             ->get();
 
