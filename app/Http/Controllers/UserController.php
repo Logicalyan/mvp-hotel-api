@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-
     use ApiResponses;
 
     public function index(UserFilter $filters)
@@ -21,10 +20,9 @@ class UserController extends Controller
         return $this->success($users, "Filter user success", 200);
     }
 
-    public function show(UserFilter $filters, $id)
+    public function show($id)
     {
-        $query = $filters->apply(User::where("id", $id));
-        $user = $query->first();
+        $user = User::find($id);
 
         if (!$user) {
             return $this->error("User not found", 404);
@@ -33,7 +31,7 @@ class UserController extends Controller
         return $this->success($user, "User found successfully", 200);
     }
 
-    public function store(UserFilter $filters)
+    public function store()
     {
         $user = User::create([
             'name' => request('name'),
@@ -51,7 +49,7 @@ class UserController extends Controller
         return $this->success($user->load('roles'), "Create user success", 201);
     }
 
-    public function update(UserFilter $filters, $id)
+    public function update($id)
     {
         $user = User::find($id);
         if (!$user) {
@@ -63,13 +61,10 @@ class UserController extends Controller
             'email' => request('email'),
         ]);
 
-        $query = $filters->apply(User::where("id", $user->id));
-        $user = $query->first();
-
         return $this->success($user, "User updated successfully", 200);
     }
 
-    public function destroy(UserFilter $filters, $id)
+    public function destroy($id)
     {
         $user = User::find($id);
         if (!$user) {
@@ -78,8 +73,7 @@ class UserController extends Controller
 
         $user->delete();
 
-        $query = $filters->apply(User::query());
-        $users = $query->paginate(10);
+        $users = User::paginate(10);
 
         return $this->success($users, "User deleted successfully", 200);
     }
