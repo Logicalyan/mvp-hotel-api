@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Data\Hotel;
 
 use App\ApiResponses;
-use App\Filters\HotelFilter;
-use App\Http\Controllers\Controller;
-use App\Models\Facility;
 use App\Models\Hotel;
+use App\Models\Facility;
+use App\Filters\HotelFilter;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Controller;
 
 class HotelController extends Controller
 {
@@ -28,50 +29,64 @@ class HotelController extends Controller
             "images" => "required|array",
             "images.*" => "image|mimes:jpg,jpeg,png|max:5120",
             "facilities" => "required|array",
-            "facilities.*" => "string|max:20"
+            "facilities.*" => "string|max:50"
         ]);
 
-        $hotel = Hotel::create($validate);
+        // hilangkan images & facilities biar tidak masuk ke Hotel::create
+        $hotelData = collect($validate)->except(['images', 'facilities'])->toArray();
+        $hotel = Hotel::create($hotelData);
 
+        // simpan images
         if ($request->has("images")) {
             foreach ($request->file("images") as $image) {
-                $originName = $image->getClientOriginalName();
-                $fileName = time() . "_" . $originName;
-
+                $fileName = time() . "_" . $image->getClientOriginalName();
                 $path = $image->storeAs("hotels", $fileName, "public");
-
                 $hotel->images()->create(["image_url" => $path]);
             }
         }
 
+        // simpan facilities
         if ($request->has("facilities")) {
             $facilityIds = [];
 
             foreach ($request->facilities as $facility) {
                 if (is_numeric($facility)) {
-                    $facilityIds[] = $facility;
+                    $exists = Facility::find($facility);
+                    if ($exists) {
+                        $facilityIds[] = $exists->id;
+                    }
                 } else {
                     $newFacility = Facility::firstOrCreate(['name' => $facility]);
                     $facilityIds[] = $newFacility->id;
                 }
             }
 
-            $hotel->facilities()->sync($facilityIds);
+            if (!empty($facilityIds)) {
+                $hotel->facilities()->sync($facilityIds);
+            }
         }
+
 
         $hotel->load(["images", "facilities"]);
 
         return $this->success($hotel, "Hotel created successfully", 201);
     }
 
-    public function index(HotelFilter $filters)
-    {
-        $query = $filters->apply(Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict']));
+public function index(HotelFilter $filters)
+{
 
-        $hotels = $query->paginate(10);
+    $baseQuery = Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict']);
 
-        return $this->success($hotels, "Hotel list success", 200);
-    }
+    $query = $filters->apply($baseQuery);
+
+    $perPage = request()->get('per_page', 10);
+    $perPage = min(max((int) $perPage, 1), 100);
+
+    $hotels = $query->paginate($perPage);
+
+
+    return $this->success($hotels, "Hotel list success", 200);
+}
 
     public function show(HotelFilter $filters, $id)
     {
@@ -142,9 +157,10 @@ class HotelController extends Controller
             return $this->error("Hotel not found", 404);
         }
 
-        $hotel->images()->delete();
-        $hotel->facilities()->delete();
-        $hotel->delete();
+        // hapus relasi turunan
+        $hotel->images()->delete();       // karena images memang belongsTo Hotel
+        $hotel->facilities()->detach();   // hanya hapus relasi pivot
+        $hotel->delete();                 // hapus hotel
 
         return $this->success(null, "Hotel deleted successfully", 200);
     }
