@@ -6,6 +6,8 @@ use App\ApiResponses;
 use App\Filters\UserFilter;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -14,15 +16,17 @@ class UserController extends Controller
 
     public function index(UserFilter $filters)
     {
-        $query = $filters->apply(User::query());
-        $users = $query->paginate(10);
-
+        $baseQuery = User::query()->with('roles');
+        $query = $filters->apply($baseQuery);
+        $perPage = request()->get('per_page', 10);
+        $perPage = min(max((int) $perPage, 1), 100);
+        $users = $query->paginate($perPage);
         return $this->success($users, "Filter user success", 200);
     }
 
-    public function show(UserFilter $filters, $id)
+    public function show($id)
     {
-        $query = $filters->apply(User::where("id", $id));
+        $query = User::where("id", $id);
         $user = $query->first();
 
         if (!$user) {
@@ -32,16 +36,19 @@ class UserController extends Controller
         return $this->success($user, "User found successfully", 200);
     }
 
-    public function store()
+    public function store(Request $request)
     {
-        $user = User::create([
-            'name' => request('name'),
-            'email' => request('email'),
-            'password' => bcrypt(request('password'))
+        $validate = $request->validate([
+            'name' => 'required|string',
+            'email' => 'required|email',
+            'password' => 'required|string|min:8',
         ]);
 
+        $validate['password'] = Hash::make($validate['password']);
+        $user = User::create($validate);
+
         if (request()->has('role')) {
-            $role = Role::where('slug', request('role'))->first();
+            $role = Role::where('slug', $request->role)->first();
             if ($role) {
                 $user->roles()->attach($role->id);
             }
@@ -50,7 +57,7 @@ class UserController extends Controller
         return $this->success($user->load('roles'), "Create user success", 201);
     }
 
-    public function update(UserFilter $filters, $id)
+    public function update($id)
     {
         $user = User::find($id);
         if (!$user) {
@@ -62,7 +69,7 @@ class UserController extends Controller
             'email' => request('email'),
         ]);
 
-        $query = $filters->apply(User::where("id", $user->id));
+        $query = User::where("id", $user->id);
         $user = $query->first();
 
         return $this->success($user, "User updated successfully", 200);

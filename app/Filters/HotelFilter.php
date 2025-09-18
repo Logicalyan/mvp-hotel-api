@@ -80,7 +80,7 @@ class HotelFilter
         }
 
         return $this->builder->whereHas('facilities', function ($q) use ($facilityIds) {
-            $q->whereIn('facilities.id', $facilityIds);
+            $q->whereIn('hotel_facilities.id', $facilityIds);
         }, '=', count($facilityIds));
     }
 

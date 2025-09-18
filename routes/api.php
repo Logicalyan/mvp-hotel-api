@@ -13,10 +13,10 @@ Route::get('/districts', [ReferenceController::class, 'districts']);
 Route::get('/sub-districts', [ReferenceController::class, 'subDistricts']);
 Route::get('/facilities', [ReferenceController::class, 'facilities']);
 Route::apiResource('hotels', HotelController::class);
+Route::apiResource('users', UserController::class);
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin'])->group(function () {
-        Route::resource('users', UserController::class);
     });
 });
 
