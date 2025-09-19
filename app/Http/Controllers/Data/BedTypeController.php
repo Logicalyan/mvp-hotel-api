@@ -12,13 +12,9 @@ class BedTypeController extends Controller
 {
     use ApiResponses;
     // GET /api/bed-types
-    public function index(BedTypeFilter $filters)
+    public function index()
     {
-        $baseQuery = BedType::query();
-        $query = $filters->apply($baseQuery);
-        $perPage = request()->get('per_page', 10);
-        $perPage = min(max((int) $perPage, 1), 100);
-        $bedTypes = $query->paginate($perPage);
+        $bedTypes = BedType::select('id', 'name');
 
         return $this->success($bedTypes, "Bed Type list Success", 200);
     }
