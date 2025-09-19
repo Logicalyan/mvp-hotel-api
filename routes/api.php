@@ -3,6 +3,10 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Data\Hotel\HotelController;
 use App\Http\Controllers\Data\Hotel\Reference\ReferenceController;
+use App\Http\Controllers\RoomController;
+use App\Http\Controllers\RoomTypeController;
+use App\Http\Controllers\Data\BedTypeController;
+
 use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -14,10 +18,12 @@ Route::get('/sub-districts', [ReferenceController::class, 'subDistricts']);
 Route::get('/facilities', [ReferenceController::class, 'facilities']);
 Route::apiResource('hotels', HotelController::class);
 Route::apiResource('users', UserController::class);
+Route::apiResource('bed-types', BedTypeController::class);
+Route::apiResource('room-types', RoomTypeController::class);
+Route::apiResource('rooms', RoomController::class);
 
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::middleware(['role:admin'])->group(function () {
-    });
+    Route::middleware(['role:admin'])->group(function () {});
 });
 
 Route::controller(AuthController::class)->group(function () {
