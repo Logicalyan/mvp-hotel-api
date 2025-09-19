@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Data;
 
+use App\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\BedType;
 use App\Filters\BedTypeFilter;
@@ -9,45 +10,53 @@ use Illuminate\Http\Request;
 
 class BedTypeController extends Controller
 {
+    use ApiResponses;
     // GET /api/bed-types
-    public function index(Request $request)
+    public function index(BedTypeFilter $filters)
     {
-        $filter = new BedTypeFilter($request);
-        $bedTypes = $filter->apply(BedType::query())->paginate(10);
+        $baseQuery = BedType::query();
+        $query = $filters->apply($baseQuery);
+        $perPage = request()->get('per_page', 10);
+        $perPage = min(max((int) $perPage, 1), 100);
+        $bedTypes = $query->paginate($perPage);
 
-        return response()->json($bedTypes);
+        return $this->success($bedTypes, "Bed Type list Success", 200);
     }
 
     // POST /api/bed-types
     public function store(Request $request)
     {
-        $request->validate([
+        $validate = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
         ]);
 
-        $bedType = BedType::create($request->only(['name', 'description']));
+        $bedType = BedType::create($validate);
 
-        return response()->json($bedType, 201);
+        return $this->success($bedType, "Bed type created successfully");
     }
 
     // GET /api/bed-types/{id}
     public function show(BedType $bedType)
     {
-        return response()->json($bedType);
+        if (!$bedType) {
+            return $this->error("bedType not found", 404);
+        }
+
+        return $this->success($bedType, "Hotel found successfully", 200);
     }
 
     // PUT /api/bed-types/{id}
     public function update(Request $request, BedType $bedType)
     {
-        $request->validate([
+        $validate = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
         ]);
 
-        $bedType->update($request->only(['name', 'description']));
+        $bedType->update($validate);
 
-        return response()->json($bedType);
+        return $this->success($bedType, "Updated BedType Successfully", 200);
     }
 
     // DELETE /api/bed-types/{id}
@@ -55,6 +64,6 @@ class BedTypeController extends Controller
     {
         $bedType->delete();
 
-        return response()->json(null, 204);
+        return $this->success($bedType, "Deleted BedType Successfully", 200);
     }
 }
