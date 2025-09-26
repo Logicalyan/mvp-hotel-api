@@ -43,4 +43,17 @@ class BedTypeFilter
             }
         });
     }
+
+    public function sort(string $value): Builder
+    {
+        [$field, $direction] = explode(',', $value);
+        $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
+
+        $sortable = ['name', 'created_at'];
+        if (in_array($field, $sortable)) {
+            return $this->builder->orderBy($field, $direction);
+        }
+
+        return $this->builder;
+    }
 }

@@ -2,19 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\ApiResponses;
 use App\Models\Room;
 use Illuminate\Http\Request;
 
 class RoomController extends Controller
 {
+
+    use ApiResponses;
+
     public function index()
     {
-        $rooms = Room::with('roomType')->get();
+        $query = Room::with('roomType');
+        $perPage = request()->get('per_page', 10);
+        $perPage = min(max((int) $perPage, 1), 100);
+        $rooms = $query->paginate($perPage);
 
-        return response()->json([
-            "success" => true,
-            "data" => $rooms
-        ]);
+        return $this->success($rooms, "Rooms Retrivied Successfully", 200);
     }
 
     public function store(Request $request)
@@ -29,21 +33,14 @@ class RoomController extends Controller
 
         $room = Room::create($validate);
 
-        return response()->json([
-            "success" => true,
-            "message" => "Room created successfully",
-            "data" => $room->load('roomType')
-        ], 201);
+        return $this->success($room->load('room_type'), "Room Created Successfully", 201);
     }
 
     public function show($id)
     {
         $room = Room::with('roomType')->findOrFail($id);
 
-        return response()->json([
-            "success" => true,
-            "data" => $room
-        ]);
+        return $this->success($room, "Room get by id successfully", 200);
     }
 
     public function update(Request $request, $id)
@@ -60,11 +57,7 @@ class RoomController extends Controller
 
         $room->update($validate);
 
-        return response()->json([
-            "success" => true,
-            "message" => "Room updated successfully",
-            "data" => $room->load('roomType')
-        ]);
+        return $this->success($room->load('roomType'), "Room updated successfully", 200);
     }
 
     public function destroy($id)
@@ -72,9 +65,6 @@ class RoomController extends Controller
         $room = Room::findOrFail($id);
         $room->delete();
 
-        return response()->json([
-            "success" => true,
-            "message" => "Room deleted successfully"
-        ]);
+        return $this->success($room,'Room Deleted Successfully', 200);
     }
 }

@@ -12,11 +12,15 @@ class BedTypeController extends Controller
 {
     use ApiResponses;
     // GET /api/bed-types
-    public function index()
+    public function index(BedTypeFilter $filters)
     {
-        $bedTypes = BedType::select('id', 'name');
+        $baseQuery = BedType::query();
+        $query = $filters->apply($baseQuery);
+        $perPage = request()->get('per_page', 10);
+        $perPage = min(max((int) $perPage, 1), 100);
+        $bedTypes = $query->paginate($perPage);
 
-        return $this->success($bedTypes, "Bed Type list Success", 200);
+        return $this->success($bedTypes, "Bed Type Retrivied Successfully", 200);
     }
 
     // POST /api/bed-types
@@ -29,7 +33,7 @@ class BedTypeController extends Controller
 
         $bedType = BedType::create($validate);
 
-        return $this->success($bedType, "Bed type created successfully");
+        return $this->success($bedType, "Bed type created successfully", 201);
     }
 
     // GET /api/bed-types/{id}
