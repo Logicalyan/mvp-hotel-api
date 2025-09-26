@@ -26,8 +26,7 @@ class UserController extends Controller
 
     public function show($id)
     {
-        $query = User::where("id", $id);
-        $user = $query->first();
+        $user = User::with('roles')->findOrFail($id);
 
         if (!$user) {
             return $this->error("User not found", 404);
@@ -42,6 +41,7 @@ class UserController extends Controller
             'name' => 'required|string',
             'email' => 'required|email',
             'password' => 'required|string|min:8',
+            'role' => 'required|string|exists:roles,slug'
         ]);
 
         $validate['password'] = Hash::make($validate['password']);
@@ -57,22 +57,33 @@ class UserController extends Controller
         return $this->success($user->load('roles'), "Create user success", 201);
     }
 
-    public function update($id)
+    public function update(Request $request, $id)
     {
-        $user = User::find($id);
-        if (!$user) {
-            return $this->error("User not found", 404);
-        }
+        $user = User::findOrFail($id);
 
-        $user->update([
-            'name' => request('name'),
-            'email' => request('email'),
+        $validate = $request->validate([
+            'name' => 'required|string',
+            'email' => 'required|email|unique:users,email,' . $id,
+            'password' => 'nullable|string|min:8',
+            'role' => 'nullable|string|exists:roles,slug',
         ]);
 
-        $query = User::where("id", $user->id);
-        $user = $query->first();
+        if (isset($validate['password'])) {
+            $validate['password'] = Hash::make($validate['password']);
+        } else {
+            unset($validate['password']);
+        }
 
-        return $this->success($user, "User updated successfully", 200);
+        $user->update($validate);
+
+        if ($request->has('role')) {
+            $role = Role::where('slug', $request->role)->first();
+            if ($role) {
+                $user->roles()->sync([$role->id]);
+            }
+        }
+
+        return $this->success($user->load('roles'), "Update user success", 200);
     }
 
     public function destroy(UserFilter $filters, $id)
