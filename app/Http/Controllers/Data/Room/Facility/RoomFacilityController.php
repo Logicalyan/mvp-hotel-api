@@ -1,18 +1,18 @@
 <?php
 
-namespace App\Http\Controllers\Data\Hotel\Facility;
+namespace App\Http\Controllers\Data\Room\Facility;
 
 use App\ApiResponses;
 use App\Http\Controllers\Controller;
-use App\Models\HotelFacility;
+use App\Models\RoomTypeFacility;
 use Illuminate\Http\Request;
 
-class FacilityController extends Controller
+class RoomFacilityController extends Controller
 {
     use ApiResponses;
 
     public function index(){
-        $query = HotelFacility::query();
+        $query = RoomTypeFacility::query();
         $perPage = request()->get('per_page', 10);
         $perPage = min(max((int) $perPage, 1), 100);
         $facilities = $query->paginate($perPage);
@@ -25,22 +25,22 @@ class FacilityController extends Controller
             'name' => 'required|string'
         ]);
 
-        $facilities = HotelFacility::create($validate);
+        $facilities = RoomTypeFacility::create($validate);
         return $this->success($facilities, "Facility Create Successfully", 201);
     }
 
-    public function update(HotelFacility $hotelFacility, Request $request){
+    public function update(RoomTypeFacility $roomTypeFacility, Request $request){
         $validate = $request->validate([
             'name' => 'sometimes|string|max:255',
         ]);
 
-        $hotelFacility->update($validate);
+        $roomTypeFacility->update($validate);
 
-        return $this->success($hotelFacility, "Updated BedType Successfully", 200);
+        return $this->success($roomTypeFacility, "Updated BedType Successfully", 200);
     }
 
-    public function destroy(HotelFacility $hotelFacility){
-        $hotelFacility->delete();
+    public function destroy(RoomTypeFacility $roomTypeFacility){
+        $roomTypeFacility->delete();
         return $this->success(null, "Facility Deleted Successfully", 200);
     }
 }
