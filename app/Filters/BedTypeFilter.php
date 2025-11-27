@@ -5,7 +5,7 @@ namespace App\Filters;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 
-class UserFilter
+class BedTypeFilter
 {
     protected Request $request;
     protected Builder $builder;
@@ -33,17 +33,15 @@ class UserFilter
         return $this->request->all();
     }
 
-    public function role(string $value): Builder
+    public function search($value): Builder
     {
-        return $this->builder->whereHas('roles', function ($q) use ($value) {
-            $q->where("slug", $value);
+        $columns = ['name'];
+
+        return $this->builder->where(function ($q) use ($columns, $value) {
+            foreach ($columns as $col) {
+                $q->orWhere($col, 'LIKE', "%{$value}%");
+            }
         });
-    }
-
-
-    public function status(string $value): Builder
-    {
-        return $this->builder->where('status', $value);
     }
 
     public function sort(string $value): Builder
@@ -51,21 +49,11 @@ class UserFilter
         [$field, $direction] = explode(',', $value);
         $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
 
-        $sortable = ['name', 'email', 'created_at'];
+        $sortable = ['name', 'created_at'];
         if (in_array($field, $sortable)) {
             return $this->builder->orderBy($field, $direction);
         }
 
         return $this->builder;
-    }
-
-    public function search($value)
-    {
-        $columns = ['name', 'email'];
-        return $this->builder->where(function ($q) use ($columns, $value) {
-            foreach ($columns as $col) {
-                $q->orWhere($col, 'LIKE', "%{$value}%");
-            }
-        });
     }
 }
