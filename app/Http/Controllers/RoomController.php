@@ -13,7 +13,7 @@ class RoomController extends Controller
 
     public function index()
     {
-        $query = Room::with('roomType');
+        $query = Room::with('roomType', 'roomType.hotel');
         $perPage = request()->get('per_page', 10);
         $perPage = min(max((int) $perPage, 1), 100);
         $rooms = $query->paginate($perPage);
@@ -33,7 +33,7 @@ class RoomController extends Controller
 
         $room = Room::create($validate);
 
-        return $this->success($room->load('room_type'), "Room Created Successfully", 201);
+        return $this->success($room->load('roomType'), "Room Created Successfully", 201);
     }
 
     public function show($id)
