@@ -15,7 +15,7 @@ class RoomTypeController extends Controller
 
     public function index(RoomTypeFilter $filters)
     {
-        $baseQuery = RoomType::query()->with(['hotels','facilities', 'images', 'beds.bedType', 'prices']);
+        $baseQuery = RoomType::query()->with(['hotel','facilities', 'images', 'beds.bedType', 'prices']);
 
         $query = $filters->apply($baseQuery);
         $perPage = request()->get('per_page', 10);
@@ -176,7 +176,7 @@ class RoomTypeController extends Controller
                     $exists = RoomTypeFacility::find($facility);
                     if ($exists) {
                         $facilityIds[] = $exists->id;
-                    }   
+                    }
                 } else {
                     $newFacility = RoomTypeFacility::firstOrCreate(['name' => $facility]);
                     $facilityIds[] = $newFacility->id;
