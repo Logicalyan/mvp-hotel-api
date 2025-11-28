@@ -176,7 +176,7 @@ class RoomTypeController extends Controller
                     $exists = RoomTypeFacility::find($facility);
                     if ($exists) {
                         $facilityIds[] = $exists->id;
-                    }
+                    }   
                 } else {
                     $newFacility = RoomTypeFacility::firstOrCreate(['name' => $facility]);
                     $facilityIds[] = $newFacility->id;
