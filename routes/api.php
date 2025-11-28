@@ -14,13 +14,17 @@ use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('/references')->group(function (){
+Route::prefix('/references')->group(function () {
     Route::get('/provinces', [ReferenceController::class, 'provinces']);
     Route::get('/cities', [ReferenceController::class, 'cities']);
     Route::get('/districts', [ReferenceController::class, 'districts']);
     Route::get('/sub-districts', [ReferenceController::class, 'subDistricts']);
     Route::get('/facilities', [ReferenceController::class, 'facilities']);
     Route::get('/roles', [RoleController::class, 'index']);
+    
+    Route::get('/hotels', [ReferenceController::class, 'hotels']);
+    Route::get('/room-type-facilities', [ReferenceController::class, 'roomTypeFacilities']);
+    Route::get('/bed-types', [ReferenceController::class, 'bedTypes']);
 });
 
 Route::apiResource('hotel-facilities', FacilityController::class);
@@ -34,9 +38,7 @@ Route::apiResource('rooms', RoomController::class);
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('reservations', ReservationController::class);
     Route::post('reservations/{id}/pay-remaining', [ReservationController::class, 'payRemaining']);
-    Route::middleware(['role:admin'])->group(function () {
-
-    });
+    Route::middleware(['role:admin'])->group(function () {});
 });
 
 Route::controller(AuthController::class)->group(function () {
