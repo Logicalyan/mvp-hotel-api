@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Data\Hotel\Reference;
 
 use App\ApiResponses;
 use App\Http\Controllers\Controller;
+use App\Models\BedType;
 use App\Models\Province;
 use App\Models\City;
 use App\Models\District;
+use App\Models\Hotel;
 use App\Models\SubDistrict;
 use App\Models\HotelFacility;
+use App\Models\RoomTypeFacility;
 use Illuminate\Http\Request;
 
 class ReferenceController extends Controller
@@ -72,5 +75,30 @@ class ReferenceController extends Controller
             ->get();
 
         return $this->success($facilities, "Facilities retrieved successfully");
+    }
+
+    public function hotels()
+    {
+        $facilities = Hotel::select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return $this->success($facilities, "Hotel retrieved successfully");
+    }
+    public function roomTypeFacilities()
+    {
+        $facilities = RoomTypeFacility::select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return $this->success($facilities, "Room Type Facility retrieved successfully");
+    }
+    public function bedTypes()
+    {
+        $facilities = BedType::select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return $this->success($facilities, "Bed type retrieved successfully");
     }
 }
