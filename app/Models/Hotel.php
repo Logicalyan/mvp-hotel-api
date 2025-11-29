@@ -18,6 +18,11 @@ class Hotel extends Model
         "email",
     ];
 
+    public function staff()
+    {
+        return $this->hasMany(HotelStaff::class);
+    }
+
     public function subDistrict()
     {
         return $this->belongsTo(SubDistrict::class, 'sub_district_id');
