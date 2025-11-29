@@ -335,6 +335,120 @@ class RoomTypeController extends Controller
         return $this->success($roomType, "Room type updated successfully", 200);
     }
 
+    public function updateByHotelId(Request $request)
+    {
+        $hotelId = $request->route('hotel_id');
+        $roomTypeId = $request->route('room_type_id');
+
+        // Cari room type yang sesuai hotel_id DAN room_type_id
+        $roomType = RoomType::where('hotel_id', $hotelId)
+            ->where('id', $roomTypeId)
+            ->first();
+
+        if (!$roomType) {
+            return $this->error("Room type not found in this hotel", 404);
+        }
+
+        $validate = $request->validate([
+            "name" => "sometimes|string|max:100",
+            "description" => "nullable|string",
+            "capacity" => "sometimes|integer|min:1",
+
+            "facilities" => "sometimes|array",
+            "facilities.*" => "string|max:50",
+
+            "images" => "nullable|array",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:2048",
+            "remove_images" => "sometimes|array",
+            "remove_images.*" => "integer|exists:room_type_images,id",
+
+            "beds" => "sometimes|array",
+            "beds.*.bed_type_id" => "required_with:beds|exists:bed_types,id",
+            "beds.*.quantity" => "required_with:beds|integer|min:1",
+
+            "prices" => "sometimes|array",
+            "prices.*.weekday_price" => "required_with:prices|numeric|min:0",
+            "prices.*.weekend_price" => "required_with:prices|numeric|min:0",
+            "prices.*.currency" => "required_with:prices|string|max:10",
+            "prices.*.start_date" => "required_with:prices|date",
+            "prices.*.end_date" => "required_with:prices|date|after_or_equal:prices.*.start_date",
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            // Update basic info (HAPUS hotel_id dari data yang bisa diupdate)
+            $roomTypeData = collect($validate)
+                ->except(['facilities', 'images', 'beds', 'prices', 'remove_images'])
+                ->toArray();
+            $roomType->update($roomTypeData);
+
+            // Remove selected images
+            if ($request->filled("remove_images")) {
+                // Validasi bahwa images yang mau dihapus milik room type ini
+                $images = $roomType->images()
+                    ->whereIn("id", $request->remove_images)
+                    ->get();
+
+                foreach ($images as $image) {
+                    Storage::disk("public")->delete($image->image_url);
+                    $image->delete();
+                }
+            }
+
+            // Add new images
+            if ($request->hasFile("images")) {
+                foreach ($request->file("images") as $image) {
+                    $fileName = uniqid() . '_' . time() . '.' . $image->getClientOriginalExtension();
+                    $path = $image->storeAs("room_types/{$roomType->id}", $fileName, "public");
+                    $roomType->images()->create(["image_url" => $path]);
+                }
+            }
+
+            // Update facilities
+            if ($request->has("facilities")) {
+                $facilityIds = [];
+                foreach ($request->facilities as $facility) {
+                    if (is_numeric($facility)) {
+                        $facilityIds[] = $facility;
+                    } else {
+                        $newFacility = RoomTypeFacility::firstOrCreate(['name' => $facility]);
+                        $facilityIds[] = $newFacility->id;
+                    }
+                }
+                $roomType->facilities()->sync($facilityIds);
+            }
+
+            // Update beds
+            if ($request->has("beds")) {
+                $roomType->beds()->delete();
+                foreach ($request->beds as $bed) {
+                    $roomType->beds()->create([
+                        "bed_type_id" => $bed["bed_type_id"],
+                        "quantity" => $bed["quantity"],
+                    ]);
+                }
+            }
+
+            // Update prices
+            if ($request->has("prices")) {
+                $roomType->prices()->delete();
+                foreach ($request->prices as $price) {
+                    $roomType->prices()->create($price);
+                }
+            }
+
+            DB::commit();
+
+            $roomType->load(["hotel", "facilities", "images", "beds.bedType", "prices"]);
+
+            return $this->success($roomType, "Room type updated successfully", 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->error("Failed to update room type: " . $e->getMessage(), 500);
+        }
+    }
+
     public function destroy($id)
     {
         $roomType = RoomType::find($id);
