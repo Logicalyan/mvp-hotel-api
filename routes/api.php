@@ -35,6 +35,7 @@ Route::middleware(['auth:sanctum','check.hotel.staff', 'role:hotel'])->group(fun
     Route::get('hotel/{hotel_id}/room-types', [RoomTypeController::class, 'indexByHotelId']);
     Route::get('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'showByHotelId']);
     Route::post('hotel/{hotel_id}/room-types', [RoomTypeController::class, 'storeByHotelId']);
+    Route::put('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'updateByHotelId']);
     Route::delete('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'destroyByHotelId']);
 });
 
