@@ -67,3 +67,12 @@ Route::controller(AuthController::class)->group(function () {
     Route::get('/user', 'profile')->middleware('auth:sanctum');
     Route::post('/logout', 'logout')->middleware('auth:sanctum');
 });
+
+// Room routes
+Route::prefix('room-types/{room_type_id}/rooms')->group(function () {
+    Route::post('bulk', [RoomController::class, 'bulkStore']); // Manual bulk create
+    Route::post('auto-generate', [RoomController::class, 'autoGenerate']); // Auto generate
+    Route::get('available', [RoomController::class, 'availableByRoomType']); // Get available rooms
+});
+
+Route::apiResource('rooms', RoomController::class);

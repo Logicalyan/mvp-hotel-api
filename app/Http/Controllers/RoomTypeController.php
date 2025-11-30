@@ -160,6 +160,8 @@ class RoomTypeController extends Controller
         $roomTypeData['hotel_id'] = $hotelId; // ← PERBAIKAN DI SINI
 
         $roomType = RoomType::create($roomTypeData);
+        $this->generateRooms($roomType);
+
 
         // Handle facilities (PERBAIKAN - HAPUS PENGECEKAN EXISTS)
         if ($request->has("facilities")) {
@@ -270,6 +272,7 @@ class RoomTypeController extends Controller
             "prices.*.currency" => "sometimes|string|max:10",
             "prices.*.start_date" => "sometimes|date",
             "prices.*.end_date" => "sometimes|date|after_or_equal:prices.*.start_date",
+            "total_rooms" => "sometimes|integer",
 
         ]);
 
@@ -501,6 +504,44 @@ class RoomTypeController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->error("Failed to delete room type: " . $e->getMessage(), 500);
+        }
+    }
+
+    private function generateRooms(RoomType $roomType)
+    {
+        $currentCount = $roomType->rooms()->count();
+        $expectedCount = $roomType->total_rooms;
+
+        // Jika butuh tambah room
+        if ($expectedCount > $currentCount) {
+            $difference = $expectedCount - $currentCount;
+
+            for ($i = 1; $i <= $difference; $i++) {
+                $newRoomNumber = $roomType->id . '-' . ($currentCount + $i);
+
+                $roomType->rooms()->create([
+                    'room_number' => $newRoomNumber,
+                    'floor' => null,
+                    'status' => 'available',
+                    'is_active' => true
+                ]);
+            }
+        }
+
+        // Jika harus mengurangi room
+        if ($expectedCount < $currentCount) {
+            $difference = $currentCount - $expectedCount;
+
+            // Hapus room yang masih available
+            $roomsToDelete = $roomType->rooms()
+                ->where('status', 'available')
+                ->orderByDesc('id')
+                ->take($difference)
+                ->get();
+
+            foreach ($roomsToDelete as $room) {
+                $room->delete();
+            }
         }
     }
 }

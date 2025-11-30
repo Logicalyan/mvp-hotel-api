@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/Room.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -8,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class Room extends Model
 {
     protected $fillable = [
-        // 'hotel_id',
         'room_number',
         'floor',
         'status',
@@ -16,15 +14,37 @@ class Room extends Model
         'room_type_id'
     ];
 
-    // relasi ke Hotel
-    public function hotel()
-    {
-        return $this->belongsTo(Hotel::class);
-    }
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
-    // relasi ke RoomType
     public function roomType()
     {
         return $this->belongsTo(RoomType::class);
+    }
+
+    public function reservations()
+    {
+        return $this->hasMany(RoomReservation::class);
+    }
+
+    // Helper method
+    public function isAvailableForDates($checkIn, $checkOut)
+    {
+        if ($this->status !== 'available' || !$this->is_active) {
+            return false;
+        }
+
+        return !$this->reservations()
+            ->where('reservation_status', '!=', 'cancelled')
+            ->where(function ($query) use ($checkIn, $checkOut) {
+                $query->whereBetween('check_in_date', [$checkIn, $checkOut])
+                    ->orWhereBetween('check_out_date', [$checkIn, $checkOut])
+                    ->orWhere(function ($q) use ($checkIn, $checkOut) {
+                        $q->where('check_in_date', '<=', $checkIn)
+                          ->where('check_out_date', '>=', $checkOut);
+                    });
+            })
+            ->exists();
     }
 }
