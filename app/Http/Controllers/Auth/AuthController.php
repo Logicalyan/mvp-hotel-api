@@ -15,7 +15,8 @@ class AuthController extends Controller
 {
     use ApiResponses;
 
-    public function register(Request $request) {
+    public function register(Request $request)
+    {
 
         $validated = $request->validate([
             'name' => 'required|string|max:10',
@@ -57,7 +58,8 @@ class AuthController extends Controller
         ], 'Register Successfully', 201);
     }
 
-    public function login(Request $request) {
+    public function login(Request $request)
+    {
         $validated = $request->validate([
             'email' => 'required|string|email',
             'password' => 'required|string'
@@ -78,18 +80,29 @@ class AuthController extends Controller
                 Carbon::now()->addDays(7)
             )->plainTextToken;
 
+            $hotelId = null;
+            if ($user->hasRole('hotel')) {
+                // Asumsi: User has relationship dengan hotel via staff
+                $hotelId = $user->hotelStaff()->first()?->hotel_id;
+
+                // Atau kalau structure beda:
+                // $hotelId = $user->hotels()->first()?->id;
+            }
+
             return $this->success([
                 'user' => $user,
                 'role' => $user->roles()->pluck('slug')->first(),
                 'token' => $token,
-                'device' => $deviceName
+                'device' => $deviceName,
+                'hotel_id' => $hotelId,
             ], 'Login Successfully');
         } catch (\Exception $e) {
             return $this->error('Login Failed: ' . $e->getMessage(), 500);
         }
     }
 
-    public function profile(Request $request) {
+    public function profile(Request $request)
+    {
         $user = $request->user();
 
         return $this->success([
@@ -98,7 +111,8 @@ class AuthController extends Controller
         ], 'Get Profile Successfully');
     }
 
-    public function logout(Request $request) {
+    public function logout(Request $request)
+    {
         $user = $request->user();
 
         $user->currentAccessToken()->delete();

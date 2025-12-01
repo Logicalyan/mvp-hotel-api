@@ -55,4 +55,52 @@ class User extends Authenticatable
     public function hasRole($role) {
         return $this->roles()->where("slug", $role)->exists();
     }
+
+    // Hotel staff positions
+    public function hotelStaff()
+    {
+        return $this->hasMany(HotelStaff::class);
+    }
+
+    public function hotels()
+    {
+        return $this->belongsToMany(Hotel::class, 'hotel_staff')
+                    ->withPivot('position')
+                    ->withTimestamps();
+    }
+
+    public function isCustomer()
+    {
+        return $this->roles->contains('name', 'customer');
+    }
+
+    public function isSuperAdmin()
+    {
+        return $this->roles->contains('name', 'admin');
+    }
+
+    public function hasPositionInHotel($position, $hotelId)
+    {
+        return $this->hotelStaff()
+                    ->where('hotel_id', $hotelId)
+                    ->where('position', $position)
+                    ->exists();
+    }
+
+    public function isStaffOfHotel($hotelId)
+    {
+        return $this->hotelStaff()
+                    ->where('hotel_id', $hotelId)
+                    ->exists();
+    }
+
+    public function positionInHotel($hotelId)
+    {
+        $staff = $this->hotelStaff()
+                      ->where('hotel_id', $hotelId)
+
+                      ->first();
+
+        return $staff?->position;
+    }
 }

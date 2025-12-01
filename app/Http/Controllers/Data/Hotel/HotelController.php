@@ -7,13 +7,40 @@ use App\Models\Hotel;
 use App\Models\HotelFacility;
 use App\Filters\HotelFilter;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use App\Models\HotelStaff;
+use App\Models\Role;
+use App\Models\RoomType;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class HotelController extends Controller
 {
     use ApiResponses;
+
+
+    public function dashboard(Request $request)
+    {
+        $user = $request->user();
+
+        $hotelId = $request->route('hotel_id');
+
+        $totalRoomTypes = RoomType::where('hotel_id', $hotelId)
+        ->count();
+
+        return response()->json([
+            'greeting' => 'Hello, '. $user->name,
+            'role' => $user->roles()->pluck('slug')->first(),
+            'test' => $user,
+            // 'total_rooms' => $totalRooms,
+            'total_room_type' => $totalRoomTypes,
+            'staff_name' => $user->name,
+            'hotel_id' => $request->route('hotel_id')
+        ]);
+    }
+
 
     public function store(Request $request)
     {
@@ -26,50 +53,102 @@ class HotelController extends Controller
             "city_id" => "required|exists:cities,id",
             "province_id" => "required|exists:provinces,id",
             "phone_number" => "required|numeric|digits_between:10,13",
-            "email" => "required|string|max:255",
+            "email" => "required|email|unique:users,email|max:255",
             "images" => "required|array",
             "images.*" => "image|mimes:jpg,jpeg,png|max:5120",
             "facilities" => "required|array",
-            "facilities.*" => "string|max:50"
+            "facilities.*" => "string|max:50",
+
+            "password" => "required|string|min:8",
+
         ]);
 
-        // hilangkan images & facilities biar tidak masuk ke Hotel::create
-        $hotelData = collect($validate)->except(['images', 'facilities'])->toArray();
-        $hotel = Hotel::create($hotelData);
+        DB::beginTransaction();
 
-        // simpan images
-        if ($request->has("images")) {
-            foreach ($request->file("images") as $image) {
-                $fileName = time() . "_" . $image->getClientOriginalName();
-                $path = $image->storeAs("hotels", $fileName, "public");
-                $hotel->images()->create(["image_url" => $path]);
-            }
-        }
+        try {
+            // 1. Simpan hotel
+            $hotelData = collect($validate)->except(['images', 'facilities', 'password'])->toArray();
+            $hotel = Hotel::create($hotelData);
 
-        // simpan facilities
-        if ($request->has("facilities")) {
-            $facilityIds = [];
-
-            foreach ($request->facilities as $facility) {
-                if (is_numeric($facility)) {
-                    $exists = HotelFacility::find($facility);
-                    if ($exists) {
-                        $facilityIds[] = $exists->id;
-                    }
-                } else {
-                    $newFacility = HotelFacility::firstOrCreate(['name' => $facility]);
-                    $facilityIds[] = $newFacility->id;
+            // simpan images
+            if ($request->has("images")) {
+                foreach ($request->file("images") as $image) {
+                    $fileName = time() . "_" . $image->getClientOriginalName();
+                    $path = $image->storeAs("hotels", $fileName, "public");
+                    $hotel->images()->create(["image_url" => $path]);
                 }
             }
 
-            if (!empty($facilityIds)) {
-                $hotel->facilities()->sync($facilityIds);
+            // simpan facilities
+            if ($request->has("facilities")) {
+                $facilityIds = [];
+
+                foreach ($request->facilities as $facility) {
+                    if (is_numeric($facility)) {
+                        $exists = HotelFacility::find($facility);
+                        if ($exists) {
+                            $facilityIds[] = $exists->id;
+                        }
+                    } else {
+                        $newFacility = HotelFacility::firstOrCreate(['name' => $facility]);
+                        $facilityIds[] = $newFacility->id;
+                    }
+                }
+
+                if (!empty($facilityIds)) {
+                    $hotel->facilities()->sync($facilityIds);
+                }
             }
+
+            // 4. AUTO-CREATE ADMIN dari data hotel (name, email, phone dari hotel)
+            $admin = User::create([
+                'name' => $validate['name'],              // ← nama hotel jadi nama admin
+                'email' => $validate['email'],            // ← email hotel jadi email admin
+                'password' => Hash::make($validate['password']),
+                'phone' => $validate['phone_number'],     // ← phone hotel jadi phone admin
+                'email_verified_at' => now(),
+            ]);
+
+            // 5. Assign role 'hotel'
+            $hotelRole = Role::where('name', 'hotel')->first();
+            if ($hotelRole) {
+                $admin->roles()->attach($hotelRole->id);
+            }
+
+            // 6. Assign sebagai hotel staff dengan position hotel_admin
+            HotelStaff::create([
+                'user_id' => $admin->id,
+                'hotel_id' => $hotel->id,
+                'position' => HotelStaff::POSITION_HOTEL_ADMIN,
+            ]);
+
+            DB::commit();
+
+            // Load relasi
+            $hotel->load(["images", "facilities", "staff.user"]);
+
+            return $this->success([
+                'hotel' => $hotel,
+                'admin' => [
+                    'id' => $admin->id,
+                    'name' => $admin->name,
+                    'email' => $admin->email,
+                    'phone' => $admin->phone,
+                    'role' => 'hotel',
+                ]
+            ], "Hotel and admin created successfully", 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            // Hapus images yang sudah terupload jika ada error
+            if (isset($hotel) && $hotel->images) {
+                foreach ($hotel->images as $image) {
+                    Storage::disk('public')->delete($image->image_url);
+                }
+            }
+
+            return $this->error("Failed to create hotel: " . $e->getMessage(), 500);
         }
-
-        $hotel->load(["images", "facilities"]);
-
-        return $this->success($hotel, "Hotel created successfully", 201);
     }
 
     public function index(HotelFilter $filters)
