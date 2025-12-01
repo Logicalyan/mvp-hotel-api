@@ -16,12 +16,6 @@ class Room extends Model
         'room_type_id'
     ];
 
-    // relasi ke Hotel
-    public function hotel()
-    {
-        return $this->belongsTo(Hotel::class);
-    }
-
     // relasi ke RoomType
     public function roomType()
     {

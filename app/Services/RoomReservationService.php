@@ -90,11 +90,24 @@ class RoomReservationService
             /**
              * 3. Determine planned check-in/out time
              */
-            $plannedCheckIn = $data['planned_check_in']
-                ?? Carbon::parse($data['check_in_date'])->setTime(14, 0, 0); // default 14:00
 
-            $plannedCheckOut = $data['planned_check_out']
-                ?? Carbon::parse($data['check_out_date'])->setTime(12, 0, 0); // default 12:00
+            $checkInDate = Carbon::parse($data['check_in_date']);
+            $checkOutDate = Carbon::parse($data['check_out_date']);
+
+            if (!empty($data['planned_check_in'])) {
+                // gabungkan tanggal + jam
+                [$h, $m] = explode(':', $data['planned_check_in']);
+                $plannedCheckIn = $checkInDate->copy()->setTime($h, $m, 0);
+            } else {
+                $plannedCheckIn = $checkInDate->copy()->setTime(14, 0, 0); // default
+            }
+
+            if (!empty($data['planned_check_out'])) {
+                [$h, $m] = explode(':', $data['planned_check_out']);
+                $plannedCheckOut = $checkOutDate->copy()->setTime($h, $m, 0);
+            } else {
+                $plannedCheckOut = $checkOutDate->copy()->setTime(12, 0, 0); // default
+            }
 
             /**
              * 4. Create reservation
@@ -118,7 +131,7 @@ class RoomReservationService
 
                 'total_price'       => $calc['total_price'],
                 'payment_status'    => 'pending',
-                'reservation_status'=> 'booked',
+                'reservation_status' => 'booked',
             ]);
 
             /**
@@ -131,6 +144,9 @@ class RoomReservationService
                     'price'          => $item['price'],
                 ]);
             }
+
+            $reservation->planned_check_in = Carbon::parse($plannedCheckIn)->format('H.i');
+            $reservation->planned_check_out = Carbon::parse($plannedCheckOut)->format('H.i');
 
             return $reservation;
         });
