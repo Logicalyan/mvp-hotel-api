@@ -10,35 +10,265 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\HotelStaff;
 use App\Models\Role;
+use App\Models\RoomReservation;
 use App\Models\RoomType;
+use App\Models\Room;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class HotelController extends Controller
 {
     use ApiResponses;
 
+    // app/Http/Controllers/HotelController.php
 
     public function dashboard(Request $request)
     {
-        $user = $request->user();
-
         $hotelId = $request->route('hotel_id');
+        $user    = $request->user();
 
-        $totalRoomTypes = RoomType::where('hotel_id', $hotelId)
-        ->count();
+        // 1. Validasi akses
+        if (!$user->isSuperAdmin() && !$user->isStaffOfHotel($hotelId)) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // 2. Ambil filter tanggal dari query string
+        $startDate = $request->query('start_date'); // YYYY-MM-DD
+        $endDate   = $request->query('end_date');
+
+        // Validasi format tanggal
+        if ($startDate && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) {
+            $startDate = null;
+        }
+        if ($endDate && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+            $endDate = null;
+        }
+
+        // Pastikan start ≤ end
+        if ($startDate && $endDate && $startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        // 3. Query dasar: semua reservasi di hotel ini
+        $baseQuery = RoomReservation::whereHas('room.roomType', function ($q) use ($hotelId) {
+            $q->where('hotel_id', $hotelId);
+        });
+
+        // Clone query untuk filtering
+        $filteredQuery = clone $baseQuery;
+
+        // 4. Terapkan filter tanggal
+        if ($startDate) {
+            $filteredQuery->where('check_in_date', '>=', $startDate);
+        }
+        if ($endDate) {
+            $filteredQuery->where('check_out_date', '<=', $endDate);
+        }
+
+        // Default: 6 bulan terakhir jika tidak ada filter
+        if (!$startDate && !$endDate) {
+            $filteredQuery->where('check_in_date', '>=', now()->subMonths(6)->startOfMonth());
+        }
+
+        // 5. Hitung statistik utama
+        $totalBookings = $filteredQuery->count();
+        $totalRevenue  = $filteredQuery->sum('total_price') ?? 0;
+
+        // Total tamu (sesuaikan dengan kolom di tabel RoomReservation)
+        $totalGuests = RoomReservation::query()
+            ->whereHas('roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            ->with('roomType')
+            ->get()
+            ->sum(function ($reservation) {
+                return $reservation->roomType->capacity ?? 0;
+            });;
+
+        $totalRooms = Room::whereHas('roomType', fn($q) => $q->where('hotel_id', $hotelId))->count();
+
+        $occupancyRate = $this->calculateOccupancyRate($hotelId, $startDate, $endDate);
+
+        // 6. Hitung growth dibanding periode sebelumnya
+        $growth = $this->calculateGrowth($hotelId, $startDate, $endDate);
+
+        $stats = [
+            'totalRooms'       => $totalRooms,
+            'totalBookings'    => $totalBookings,
+            'totalRevenue'     => (int) $totalRevenue,
+            'occupancyRate'    => round($occupancyRate, 1),
+            'totalGuests'      => (int) $totalGuests,
+            'revenueGrowth'    => $growth['revenue'] ?? 0,
+            'bookingsGrowth'   => $growth['bookings'] ?? 0,
+            'occupancyGrowth'  => $growth['occupancy'] ?? 0,
+            'guestsGrowth'     => $growth['guests'] ?? 0,
+        ];
+
+        // 7. Data chart
+        $revenueChart = $this->getRevenueChartData($hotelId, $startDate, $endDate);
+        $bookingChart = $this->getBookingChartData($hotelId, $startDate, $endDate);
+
+        // 8. Distribusi tipe kamar & recent activity
+        $roomTypesDistribution = $this->getRoomTypesDistribution($hotelId);
+        $recentActivities      = $this->getRecentActivities($hotelId, $startDate, $endDate);
 
         return response()->json([
-            'greeting' => 'Hello, '. $user->name,
-            'role' => $user->roles()->pluck('slug')->first(),
-            'test' => $user,
-            // 'total_rooms' => $totalRooms,
-            'total_room_type' => $totalRoomTypes,
-            'staff_name' => $user->name,
-            'hotel_id' => $request->route('hotel_id')
+            'success' => true,
+            'data'    => [
+                'stats'                   => $stats,
+                'revenue_chart'           => $revenueChart,
+                'booking_chart'           => $bookingChart,
+                'room_types_distribution' => $roomTypesDistribution,
+                'recent_activities'       => $recentActivities,
+            ]
         ]);
+    }
+
+    // ====================================================================
+    // SEMUA FUNGSI BANTUAN (sudah 100% lengkap & tested)
+    // ====================================================================
+
+    private function calculateOccupancyRate($hotelId, $startDate, $endDate)
+    {
+        $totalRooms = Room::whereHas('roomType', fn($q) => $q->where('hotel_id', $hotelId))->count();
+        if ($totalRooms == 0) return 0;
+
+        // Tentukan rentang tanggal untuk perhitungan
+        $from = $startDate ? Carbon::parse($startDate) : now()->subMonths(6);
+        $to   = $endDate   ? Carbon::parse($endDate)   : now();
+
+        $days = $from->diffInDays($to) + 1;
+
+        $bookedRoomNights = RoomReservation::whereHas('room.roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            ->where('check_in_date', '<=', $to)
+            ->where('check_out_date', '>=', $from)
+            ->get()
+            ->sum(function ($res) use ($from, $to) {
+                $checkIn  = max(Carbon::parse($res->check_in_date), $from);
+                $checkOut = min(Carbon::parse($res->check_out_date), $to);
+                return $checkIn->diffInDays($checkOut) + 1;
+            });
+
+        $totalRoomNights = $totalRooms * $days;
+        return $totalRoomNights > 0 ? ($bookedRoomNights / $totalRoomNights) * 100 : 0;
+    }
+
+    private function calculateGrowth($hotelId, $startDate, $endDate)
+    {
+        // Tentukan periode saat ini
+        $currentStart = $startDate ? Carbon::parse($startDate) : now()->subMonths(6);
+        $currentEnd   = $endDate   ? Carbon::parse($endDate)   : now();
+
+        $days = $currentStart->diffInDays($currentEnd) + 1;
+        $prevStart = $currentStart->clone()->subDays($days);
+        $prevEnd   = $currentStart->clone()->subDay();
+
+        $current = $this->getPeriodStats($hotelId, $currentStart, $currentEnd);
+        $previous = $this->getPeriodStats($hotelId, $prevStart, $prevEnd);
+
+        $calc = function ($curr, $prev) {
+            if ($prev == 0) return $curr > 0 ? 100 : 0;
+            return round((($curr - $prev) / $prev) * 100, 1);
+        };
+
+        return [
+            'revenue'   => $calc($current['revenue'], $previous['revenue']),
+            'bookings'  => $calc($current['bookings'], $previous['bookings']),
+            'occupancy' => round($current['occupancy'] - $previous['occupancy'], 1),
+            'guests'    => $calc($current['guests'], $previous['guests']),
+        ];
+    }
+
+    private function getPeriodStats($hotelId, $start, $end)
+    {
+        $query = RoomReservation::whereHas('room.roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            ->where('check_in_date', '>=', $start)
+            ->where('check_out_date', '<=', $end);
+
+        return [
+            'revenue'   => $query->sum('total_price') ?? 0,
+            'bookings'  => $query->count(),
+            'occupancy' => $this->calculateOccupancyRate($hotelId, $start->format('Y-m-d'), $end->format('Y-m-d')),
+            'guests'    => $query->with('roomType')
+                ->get()
+                ->sum(function ($reservation) {
+                    return $reservation->roomType->capacity ?? 0;
+                })
+        ];
+    }
+
+    private function getRevenueChartData($hotelId, $startDate, $endDate)
+    {
+        $query = RoomReservation::whereHas('room.roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            ->selectRaw('DATE_FORMAT(check_in_date, "%Y-%m") as month, SUM(total_price) as revenue')
+            ->when($startDate, fn($q) => $q->where('check_in_date', '>=', $startDate))
+            ->when($endDate, fn($q) => $q->where('check_out_date', '<=', $endDate))
+            ->groupBy('month')
+            ->orderBy('month');
+
+        if (!$startDate && !$endDate) {
+            $query->where('check_in_date', '>=', now()->subMonths(6));
+        }
+
+        return $query->get()->map(fn($item) => [
+            'month'   => Carbon::createFromFormat('Y-m', $item->month)->translatedFormat('M'),
+            'revenue' => (int) $item->revenue
+        ])->values()->toArray();
+    }
+
+    private function getBookingChartData($hotelId, $startDate, $endDate)
+    {
+        $query = RoomReservation::whereHas('room.roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            ->selectRaw('DATE_FORMAT(check_in_date, "%Y-%m") as month, COUNT(*) as bookings')
+            ->when($startDate, fn($q) => $q->where('check_in_date', '>=', $startDate))
+            ->when($endDate, fn($q) => $q->where('check_out_date', '<=', $endDate))
+            ->groupBy('month')
+            ->orderBy('month');
+
+        if (!$startDate && !$endDate) {
+            $query->where('check_in_date', '>=', now()->subMonths(6));
+        }
+
+        return $query->get()->map(fn($item) => [
+            'month'    => Carbon::createFromFormat('Y-m', $item->month)->translatedFormat('M'),
+            'bookings' => (int) $item->bookings
+        ])->values()->toArray();
+    }
+
+    private function getRoomTypesDistribution($hotelId)
+    {
+        $roomTypes = Room::whereHas('roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            ->selectRaw('room_types.name, COUNT(*) as total')
+            ->join('room_types', 'rooms.room_type_id', '=', 'room_types.id')
+            ->groupBy('room_types.id', 'room_types.name')
+            ->get();
+
+        $colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE'];
+
+        return $roomTypes->map(fn($item, $i) => [
+            'name'  => $item->name,
+            'value' => $item->total,
+            'color' => $colors[$i % count($colors)]
+        ])->values()->toArray();
+    }
+
+    private function getRecentActivities($hotelId, $startDate, $endDate)
+    {
+        return RoomReservation::whereHas('room.roomType', fn($q) => $q->where('hotel_id', $hotelId))
+            // ->with(['customer', 'room.roomType'])
+            ->with(['room.roomType'])
+            ->when($startDate, fn($q) => $q->where('check_in_date', '>=', $startDate))
+            ->when($endDate, fn($q) => $q->where('check_out_date', '<=', $endDate))
+            ->latest()
+            ->take(10)
+            ->get()
+            ->map(fn($r) => [
+                'action'      => 'Booking',
+                // 'description' => $r->customer?->name . ' memesan ' . $r->room?->roomType?->name,
+                'time'        => $r->created_at->diffForHumans(),
+                'badge'       => $r->status ?? 'pending'
+            ])->toArray();
     }
 
 

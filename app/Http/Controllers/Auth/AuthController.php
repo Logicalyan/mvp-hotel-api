@@ -89,9 +89,17 @@ class AuthController extends Controller
                 // $hotelId = $user->hotels()->first()?->id;
             }
 
+            // ✅ Get role slug
+            $roleSlug = $user->roles()->pluck('slug')->first();
+
             return $this->success([
-                'user' => $user,
-                'role' => $user->roles()->pluck('slug')->first(),
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $roleSlug,  // ← Pastikan ini string
+                    'hotel_id' => $hotelId,
+                ],
                 'token' => $token,
                 'device' => $deviceName,
                 'hotel_id' => $hotelId,
@@ -104,10 +112,19 @@ class AuthController extends Controller
     public function profile(Request $request)
     {
         $user = $request->user();
+        $roleSlug = $user->roles()->pluck('slug')->first();
+        $hotelId = null;
+
+        if ($user->hasRole('hotel')) {
+            $hotelId = $user->hotelStaff()->first()?->hotel_id;
+        }
 
         return $this->success([
-            'user' => $user,
-            'role' => $user->roles()->pluck('slug')->first()
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $roleSlug,
+            'hotel_id' => $hotelId,
         ], 'Get Profile Successfully');
     }
 
