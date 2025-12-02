@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\RoomReservation;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Midtrans\Snap;
 
@@ -58,7 +59,6 @@ class MidtransController extends Controller
             return response()->json([
                 'snap_token' => $snapToken
             ]);
-
         } catch (\Exception $e) {
             Log::error('Midtrans Token Error: ' . $e->getMessage(), [
                 'hotel_id' => $hotel_id,
@@ -66,6 +66,59 @@ class MidtransController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
+            return response()->json([
+                'error' => 'Gagal membuat token pembayaran: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    public function createUserSnapToken(Request $request, $reservation_id)
+    {
+        try {
+            $reservation = RoomReservation::with(['roomType', 'room'])
+                ->where('id', $reservation_id)
+                ->where('user_id', $request->user()->id)
+                ->firstOrFail();
+
+            if ($reservation->payment_status !== 'pending') {
+                return response()->json(['error' => 'Reservasi sudah dibayar atau dibatalkan'], 400);
+            }
+
+            \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
+            \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
+            \Midtrans\Config::$isSanitized = true;
+            \Midtrans\Config::$is3ds = true;
+
+            $params = [
+                'transaction_details' => [
+                    'order_id' => $reservation->reservation_code,
+                    'gross_amount' => $reservation->total_price,
+                ],
+                'customer_details' => [
+                    'first_name' => $reservation->guest_name,
+                    'email' => $reservation->guest_email,
+                    'phone' => $reservation->guest_phone,
+                ],
+                'item_details' => [
+                    [
+                        'id' => 'RES-' . $reservation->id,
+                        'price' => $reservation->total_price,
+                        'quantity' => 1,
+                        'name' => "Kamar {$reservation->roomType->name} - {$reservation->nights} malam",
+                    ]
+                ],
+                'callbacks' => [
+                    'finish' => url("/user/reservations/{$reservation->id}/payment/finish")
+                ]
+            ];
+
+            $snapToken = Snap::getSnapToken($params);
+
+            return response()->json([
+                'snap_token' => $snapToken
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Gagal membuat token pembayaran: ' . $e->getMessage()
             ], 500);
