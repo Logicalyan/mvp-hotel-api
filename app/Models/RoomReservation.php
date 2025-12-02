@@ -80,6 +80,17 @@ class RoomReservation extends Model
         return $this->hasOne(LateCheckoutFee::class, 'reservation_id');
     }
 
+    public function payments()
+    {
+        return $this->hasMany(ReservationPayment::class, 'reservation_id');
+    }
+
+    public function latestPayment()
+    {
+        return $this->hasOne(ReservationPayment::class)->latestOfMany();
+    }
+
+
     /*
     |--------------------------------------------------------------------------
     | Helpers
@@ -106,6 +117,15 @@ class RoomReservation extends Model
         return number_format($this->total_price, 0, ',', '.');
     }
 
+    public function getPlannedCheckInAttribute($value)
+    {
+        return \Carbon\Carbon::parse($value)->format('H.i'); // 12.00
+    }
+
+    public function getPlannedCheckOutAttribute($value)
+    {
+        return \Carbon\Carbon::parse($value)->format('H.i'); // 12.00
+    }
     /*
     |--------------------------------------------------------------------------
     | Scopes

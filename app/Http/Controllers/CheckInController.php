@@ -2,49 +2,45 @@
 
 namespace App\Http\Controllers;
 
+use App\ApiResponses;
 use App\Models\RoomReservation;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class CheckInController extends Controller
 {
+
+    use ApiResponses;
     /**
      * Handle check-in for a reservation.
      */
     public function checkIn(Request $request, $id)
     {
-        $request->validate([
-            'actual_check_in_time' => ['required', 'date']
-        ]);
-
-        // Ambil data reservation
         $reservation = RoomReservation::findOrFail($id);
 
-        // Pastikan statusnya masih "booked"
         if ($reservation->reservation_status !== 'booked') {
-            return response()->json([
-                'message' => 'Reservation cannot be checked in.'
-            ], 400);
+            return $this->error('Reservation cannot be checked in.', 400);
         }
 
-        // Pastikan belum pernah check-in
         if ($reservation->actual_check_in !== null) {
-            return response()->json([
-                'message' => 'Reservation already checked in.'
-            ], 400);
+            return $this->error('Reservation already checked in.', 400);
         }
 
-        // Update check-in time
+        // Ambil jam sekarang
+        $actualCheckIn = now(); // 2025-12-03 13:22:00
+
         $reservation->update([
-            'actual_check_in' => $request->actual_check_in_time,
+            'actual_check_in' => $actualCheckIn,
             'reservation_status' => 'checked_in'
         ]);
 
-        return response()->json([
-            'message' => 'Check-in successfully processed.',
-            'reservation_id' => $reservation->id,
-            'planned_check_in' => $reservation->planned_check_in,
-            'actual_check_in' => $reservation->actual_check_in,
-            'status' => $reservation->reservation_status
-        ]);
+        $responseData = [
+            'reservation_id'     => $reservation->id,
+            'planned_check_in'   => $reservation->planned_check_in,
+            'actual_check_in'    => $reservation->actual_check_in->format('Y-m-d H:i'),
+            'status'             => $reservation->reservation_status
+        ];
+
+        return $this->success($responseData, 'Check-in successfully processed.', 200);
     }
 }
