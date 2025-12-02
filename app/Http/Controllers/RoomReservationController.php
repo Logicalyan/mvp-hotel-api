@@ -88,7 +88,7 @@ class RoomReservationController extends Controller
             'guest_email'       => 'nullable|email|max:255',
             'check_in_date'     => 'required|date',
             'check_out_date'    => 'required|date|after:check_in_date',
-            'planned_chec   k_in'  => 'nullable|date',
+            'planned_check_in'  => 'nullable|date',
             'planned_check_out' => 'nullable|date',
         ]);
 

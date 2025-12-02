@@ -6,11 +6,12 @@ use App\ApiResponses;
 use App\Models\Room;
 use App\Models\RoomType;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class RoomController extends Controller
 {
-
     use ApiResponses;
 
     public function index()
@@ -20,28 +21,154 @@ class RoomController extends Controller
         $perPage = min(max((int) $perPage, 1), 100);
         $rooms = $query->paginate($perPage);
 
-        return $this->success($rooms, "Rooms Retrivied Successfully", 200);
+        return $this->success($rooms, "Rooms Retrieved Successfully", 200);
     }
 
     public function store(Request $request)
     {
-        $validate = $request->validate([
-            "room_type_id" => "required|exists:room_types,id",
-            "room_number" => "required|string|max:50|unique:rooms,room_number",
-            "floor" => "nullable|string|max:50",
-            "status" => "required|in:available,occupied,maintenance",
-            "is_active" => "boolean"
-        ]);
+        DB::beginTransaction();
+        try {
+            // Validasi dasar - HAPUS validasi unique di sini
+            $validated = $request->validate([
+                "room_type_id" => "required|exists:room_types,id",
+                "creation_type" => "required|in:single,bulk,auto",
+                
+                // Untuk single room
+                "room_number" => "required_if:creation_type,single|string|max:50", // HAPUS unique
+                "floor" => "nullable|string|max:50",
+                "status" => "sometimes|in:available,occupied,maintenance",
+                "is_active" => "boolean",
+                
+                // Untuk bulk rooms
+                "rooms" => "required_if:creation_type,bulk|array|min:1|max:100",
+                "rooms.*.room_number" => "required|string|max:50", // HAPUS distinct
+                "rooms.*.floor" => "nullable|string|max:50",
+                "rooms.*.status" => "sometimes|in:available,occupied,maintenance",
+                "rooms.*.is_active" => "sometimes|boolean",
+                
+                // Untuk auto generate
+                "auto_generate" => "required_if:creation_type,auto|array",
+                "auto_generate.start_floor" => "required_if:creation_type,auto|integer|min:1",
+                "auto_generate.end_floor" => "required_if:creation_type,auto|integer|min:1|gte:auto_generate.start_floor",
+                "auto_generate.rooms_per_floor" => "required_if:creation_type,auto|integer|min:1|max:50",
+                "auto_generate.room_number_prefix" => "nullable|string|max:10",
+                "auto_generate.starting_room_number" => "required_if:creation_type,auto|integer|min:1|max:99",
+            ]);
 
-        $room = Room::create($validate);
+            $roomType = RoomType::findOrFail($validated['room_type_id']);
+            $createdRooms = [];
 
-        return $this->success($room->load('roomType'), "Room Created Successfully", 201);
+            switch ($validated['creation_type']) {
+                case 'single':
+                    // Check duplicate untuk single room
+                    $this->checkDuplicateRoomNumbers([$validated['room_number']]);
+                    
+                    $room = Room::create([
+                        'room_type_id' => $validated['room_type_id'],
+                        'room_number' => $validated['room_number'],
+                        'floor' => $validated['floor'] ?? null,
+                        'status' => $validated['status'] ?? 'available',
+                        'is_active' => $validated['is_active'] ?? true,
+                    ]);
+                    $createdRooms[] = $room;
+                    break;
+
+                case 'bulk':
+                    // Check duplicates untuk bulk rooms
+                    $roomNumbers = collect($validated['rooms'])->pluck('room_number');
+                    $this->checkDuplicateRoomNumbers($roomNumbers);
+
+                    foreach ($validated['rooms'] as $roomData) {
+                        $createdRooms[] = Room::create([
+                            'room_type_id' => $validated['room_type_id'],
+                            'room_number' => $roomData['room_number'],
+                            'floor' => $roomData['floor'] ?? null,
+                            'status' => $roomData['status'] ?? 'available',
+                            'is_active' => $roomData['is_active'] ?? true,
+                        ]);
+                    }
+                    break;
+
+                case 'auto':
+                    // Auto generate rooms
+                    $autoConfig = $validated['auto_generate'];
+                    $rooms = $this->generateRoomNumbers($autoConfig);
+                    $roomNumbers = collect($rooms)->pluck('room_number');
+                    
+                    $this->checkDuplicateRoomNumbers($roomNumbers);
+
+                    foreach ($rooms as $roomData) {
+                        $createdRooms[] = Room::create([
+                            'room_type_id' => $validated['room_type_id'],
+                            'room_number' => $roomData['room_number'],
+                            'floor' => $roomData['floor'],
+                            'status' => $validated['status'] ?? 'available',
+                            'is_active' => $validated['is_active'] ?? true,
+                        ]);
+                    }
+                    break;
+            }
+
+            DB::commit();
+
+            return $this->success(
+                [
+                    'created_count' => count($createdRooms),
+                    'rooms' => Room::with('roomType')->whereIn('id', collect($createdRooms)->pluck('id'))->get()
+                ],
+                count($createdRooms) . " room(s) created successfully",
+                201
+            );
+
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            return $this->error("Validation failed: " . implode(', ', Arr::flatten($e->errors())), 422);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Room creation error: ' . $e->getMessage());
+            return $this->error("Failed to create rooms: " . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Check for duplicate room numbers
+     */
+    private function checkDuplicateRoomNumbers($roomNumbers)
+    {
+        $existingRooms = Room::whereIn('room_number', $roomNumbers)->pluck('room_number');
+        
+        if ($existingRooms->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'room_number' => ["Room numbers already exist: " . $existingRooms->implode(', ')]
+            ]);
+        }
+    }
+
+    /**
+     * Generate room numbers based on configuration
+     */
+    private function generateRoomNumbers($config)
+    {
+        $rooms = [];
+        $prefix = $config['room_number_prefix'] ?? '';
+
+        for ($floor = $config['start_floor']; $floor <= $config['end_floor']; $floor++) {
+            for ($roomNum = $config['starting_room_number']; $roomNum < $config['starting_room_number'] + $config['rooms_per_floor']; $roomNum++) {
+                $roomNumber = $prefix . $floor . str_pad($roomNum, 2, '0', STR_PAD_LEFT);
+                
+                $rooms[] = [
+                    'room_number' => $roomNumber,
+                    'floor' => (string) $floor,
+                ];
+            }
+        }
+
+        return $rooms;
     }
 
     public function show($id)
     {
         $room = Room::with('roomType')->findOrFail($id);
-
         return $this->success($room, "Room get by id successfully", 200);
     }
 
@@ -60,125 +187,6 @@ class RoomController extends Controller
         $room->update($validate);
 
         return $this->success($room->load('roomType'), "Room updated successfully", 200);
-    }
-
-     public function bulkStore(Request $request, $roomTypeId)
-    {
-        // Validasi room type exists
-        $roomType = RoomType::findOrFail($roomTypeId);
-
-        $validated = $request->validate([
-            'rooms' => 'required|array|min:1|max:100', // max 100 rooms per request
-            'rooms.*.room_number' => 'required|string|max:50|distinct',
-            'rooms.*.floor' => 'nullable|string|max:50',
-            'rooms.*.status' => 'sometimes|in:available,occupied,maintenance',
-            'rooms.*.is_active' => 'sometimes|boolean',
-        ]);
-
-        // Check for duplicate room numbers in database
-        $roomNumbers = collect($validated['rooms'])->pluck('room_number');
-        $existingRooms = Room::whereIn('room_number', $roomNumbers)->pluck('room_number');
-        
-        if ($existingRooms->isNotEmpty()) {
-            return $this->error("Room numbers already exist: " . $existingRooms->implode(', '), 422);
-        }
-
-        DB::beginTransaction();
-        try {
-            $createdRooms = [];
-            
-            foreach ($validated['rooms'] as $roomData) {
-                $createdRooms[] = Room::create([
-                    'room_type_id' => $roomTypeId,
-                    'room_number' => $roomData['room_number'],
-                    'floor' => $roomData['floor'] ?? null,
-                    'status' => $roomData['status'] ?? 'available',
-                    'is_active' => $roomData['is_active'] ?? true,
-                ]);
-            }
-
-            DB::commit();
-
-            return $this->success(
-                Room::with('roomType')->whereIn('id', collect($createdRooms)->pluck('id'))->get(),
-                count($createdRooms) . " rooms created successfully",
-                201
-            );
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->error("Failed to create rooms: " . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Auto-generate room numbers with pattern
-     * POST /api/room-types/{room_type_id}/rooms/auto-generate
-     */
-    public function autoGenerate(Request $request, $roomTypeId)
-    {
-        $roomType = RoomType::findOrFail($roomTypeId);
-
-        $validated = $request->validate([
-            'start_floor' => 'required|integer|min:1',
-            'end_floor' => 'required|integer|min:1|gte:start_floor',
-            'rooms_per_floor' => 'required|integer|min:1|max:50',
-            'room_number_prefix' => 'nullable|string|max:10', // misal: "A", "B", "VIP"
-            'starting_room_number' => 'required|integer|min:1|max:99', // misal: 01, 10
-            'status' => 'sometimes|in:available,occupied,maintenance',
-        ]);
-
-        $rooms = [];
-        $prefix = $validated['room_number_prefix'] ?? '';
-
-        for ($floor = $validated['start_floor']; $floor <= $validated['end_floor']; $floor++) {
-            for ($roomNum = $validated['starting_room_number']; $roomNum < $validated['starting_room_number'] + $validated['rooms_per_floor']; $roomNum++) {
-                $roomNumber = $prefix . $floor . str_pad($roomNum, 2, '0', STR_PAD_LEFT);
-                
-                $rooms[] = [
-                    'room_number' => $roomNumber,
-                    'floor' => (string) $floor,
-                ];
-            }
-        }
-
-        // Check duplicates
-        $roomNumbers = collect($rooms)->pluck('room_number');
-        $existingRooms = Room::whereIn('room_number', $roomNumbers)->pluck('room_number');
-        
-        if ($existingRooms->isNotEmpty()) {
-            return $this->error("Some room numbers already exist: " . $existingRooms->implode(', '), 422);
-        }
-
-        DB::beginTransaction();
-        try {
-            $createdRooms = [];
-            
-            foreach ($rooms as $roomData) {
-                $createdRooms[] = Room::create([
-                    'room_type_id' => $roomTypeId,
-                    'room_number' => $roomData['room_number'],
-                    'floor' => $roomData['floor'],
-                    'status' => $validated['status'] ?? 'available',
-                    'is_active' => true,
-                ]);
-            }
-
-            DB::commit();
-
-            return $this->success(
-                [
-                    'generated_count' => count($createdRooms),
-                    'rooms' => Room::with('roomType')->whereIn('id', collect($createdRooms)->pluck('id'))->get()
-                ],
-                count($createdRooms) . " rooms auto-generated successfully",
-                201
-            );
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->error("Failed to generate rooms: " . $e->getMessage(), 500);
-        }
     }
 
     /**

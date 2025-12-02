@@ -63,7 +63,7 @@ class RoomTypeController extends Controller
             "facilities" => "required|array",
             "facilities.*" => "string|max:50",
             "images" => "required|array",
-            "images.*" => "image|mimes:jpg,jpeg,png|max:2048",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:51200",
             "beds" => "required|array",
             "beds.*.bed_type_id" => "required|exists:bed_types,id",
             "beds.*.quantity" => "required|integer|min:1",
@@ -141,7 +141,7 @@ class RoomTypeController extends Controller
             "facilities" => "required|array",
             "facilities.*" => "string|max:50",
             "images" => "required|array",
-            "images.*" => "image|mimes:jpg,jpeg,png|max:2048",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:51200",
             "beds" => "required|array",
             "beds.*.bed_type_id" => "required|exists:bed_types,id",
             "beds.*.quantity" => "required|integer|min:1",
@@ -258,7 +258,7 @@ class RoomTypeController extends Controller
             "facilities.*" => "string|max:50",
 
             "images" => "nullable|array",
-            "images.*" => "image|mimes:jpg,jpeg,png|max:2048",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:51200",
             "remove_images" => "sometimes|array",
             "remove_images.*" => "integer|exists:room_type_images,id",
 
@@ -361,7 +361,7 @@ class RoomTypeController extends Controller
             "facilities.*" => "string|max:50",
 
             "images" => "nullable|array",
-            "images.*" => "image|mimes:jpg,jpeg,png|max:2048",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:51200",
             "remove_images" => "sometimes|array",
             "remove_images.*" => "integer|exists:room_type_images,id",
 

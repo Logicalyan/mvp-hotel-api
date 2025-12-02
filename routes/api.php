@@ -30,13 +30,13 @@ Route::prefix('/references')->group(function () {
     Route::get('/bed-types', [ReferenceController::class, 'bedTypes']);
 });
 
-Route::middleware(['auth:sanctum','check.hotel.staff', 'role:hotel'])->group(function () {
+// Route::middleware(['auth:sanctum','check.hotel.staff', 'role:hotel'])->group(function () {
     Route::get('hotel/{hotel_id}/dashboard', [HotelController::class, 'dashboard']);
     Route::get('hotel/{hotel_id}/room-types', [RoomTypeController::class, 'indexByHotelId']);
     Route::get('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'showByHotelId']);
     Route::post('hotel/{hotel_id}/room-types', [RoomTypeController::class, 'storeByHotelId']);
     Route::delete('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'destroyByHotelId']);
-});
+// });
 
 Route::apiResource('hotel-facilities', FacilityController::class);
 Route::apiResource('room-facilities', RoomFacilityController::class);
@@ -76,3 +76,13 @@ Route::prefix('room-types/{room_type_id}/rooms')->group(function () {
 });
 
 Route::apiResource('rooms', RoomController::class);
+
+// Tambahan route untuk bulk & auto-generate
+Route::post('/room-types/{roomTypeId}/rooms/bulk', [RoomController::class, 'bulkStore']);
+Route::post('/room-types/{roomTypeId}/rooms/auto-generate', [RoomController::class, 'autoGenerate']);
+
+// Optional: kalau mau lebih rapi
+Route::prefix('room-types/{roomTypeId}/rooms')->group(function () {
+    Route::post('/bulk', [RoomController::class, 'bulkStore']);
+    Route::post('/auto-generate', [RoomController::class, 'autoGenerate']);
+});

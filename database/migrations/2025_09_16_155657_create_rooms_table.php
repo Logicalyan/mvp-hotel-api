@@ -11,7 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('room_type_id')->constrained('room_types')->cascadeOnDelete();
             $table->string('room_number')->unique();
-            $table->integer('floor')->nullable();
+            $table->string('floor')->nullable();
             $table->enum('status', ['available', 'occupied', 'maintenance'])->default('available');
             $table->boolean('is_active')->default(true);
             $table->timestamps();

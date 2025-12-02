@@ -55,7 +55,7 @@ class HotelController extends Controller
             "phone_number" => "required|numeric|digits_between:10,13",
             "email" => "required|email|unique:users,email|max:255",
             "images" => "required|array",
-            "images.*" => "image|mimes:jpg,jpeg,png|max:5120",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:51200",
             "facilities" => "required|array",
             "facilities.*" => "string|max:50",
 
@@ -198,7 +198,7 @@ class HotelController extends Controller
             "phone_number" => "sometimes|numeric|digits_between:10,13",
             "email" => "sometimes|string|max:255",
             "images" => "nullable|array",
-            "images.*" => "image|mimes:jpg,jpeg,png|max:5120",
+            "images.*" => "image|mimes:jpg,jpeg,png|max:51200",
             "facilities" => "sometimes|array",
             "facilities.*" => "string|max:50",
             "remove_images" => "sometimes|array",
