@@ -105,12 +105,13 @@ Route::patch('rooms/{id}/toggle-status', [RoomController::class, 'toggleStatus']
 Route::apiResource('hotel-facilities', HotelFacilityController::class);
 Route::apiResource('room-facilities', RoomFacilityController::class);
 Route::apiResource('hotels', HotelController::class);
-Route::apiResource('users', UserController::class);
 Route::apiResource('bed-types', BedTypeController::class);
 Route::apiResource('room-types', RoomTypeController::class);
 Route::apiResource('rooms', RoomController::class);
+Route::apiResource('users', UserController::class);
 
 //Reservations Status
+Route::get('/reservations', [RoomReservationController::class, 'index']);
 Route::post('/reservations/{id}/cancel', [RoomReservationController::class, 'cancel']);
 Route::post('/reservations/{id}/check-in', [CheckInController::class, 'checkIn']);
 Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkOut']);
@@ -122,6 +123,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Route::apiResource('reservations', ReservationController::class);
     // Route::post('reservations/{id}/pay-remaining', [ReservationController::class, 'payRemaining']);
     // Route::middleware(['role:admin'])->group(function () {});
+    Route::post('/user/reservations/{id}/midtrans/token', [MidtransController::class, 'createUserSnapToken']);
 });
 
 Route::controller(AuthController::class)->group(function () {
