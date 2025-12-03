@@ -274,24 +274,31 @@ class RoomReservationController extends Controller
     {
         $reservation = RoomReservation::findOrFail($id);
 
-        // Check if reservation can be cancelled
+        // 1. Tidak bisa cancel kalau sudah check out atau sudah cancel
         if (in_array($reservation->reservation_status, ['checked_out', 'cancelled'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot cancel this reservation.'
-            ], 422);
+            return $this->error("Cannot cancel this reservation.", 422);
         }
 
-        $reservation->update([
-            'reservation_status' => 'cancelled',
+        // 2. Tidak bisa cancel jika sudah dibayar (untuk sekarang)
+        if ($reservation->payment_status === 'paid') {
+            return $this->error("This reservation is paid. Refund feature is required before cancellation.", 422);
+        }
+
+        // 3. Release room availability
+        Room::where('id', $reservation->room_id)->update([
+            "status" => "available"
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Reservation cancelled successfully.',
-            'data'    => $reservation
+        // 4. Update reservation
+        $reservation->update([
+            'reservation_status' => 'cancelled',
+            'cancelled_at'       => now(),
+            'payment_status'     => 'failed', // atau pending tetap
         ]);
+
+        return $this->success($reservation, "Cancelled Reservation Successfully");
     }
+
 
     /**
      * Check room availability for given dates

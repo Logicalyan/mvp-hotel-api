@@ -34,7 +34,7 @@ class RoomController extends Controller
 
         // Base query: rooms yang room_type-nya punya hotel_id ini
         $baseQuery = Room::query()
-            ->whereHas('roomType', function($query) use ($hotelId) {
+            ->whereHas('roomType', function ($query) use ($hotelId) {
                 $query->where('hotel_id', $hotelId);
             })
             ->with(['roomType']);
@@ -49,6 +49,26 @@ class RoomController extends Controller
         $rooms = $query->paginate($perPage);
 
         return $this->success($rooms, "Rooms for hotel retrieved successfully", 200);
+    }
+
+    public function showByRoomTypeId(Request $request)
+    {
+        $hotelId = $request->route('hotel_id');
+        $roomTypeId = $request->route('room_type_id');
+        $roomId = $request->route('room_id');
+
+        // ✅ Validasi hotel exists
+        // Hotel::findOrFail($hotelId);
+
+        $room = Room::with('roomType.hotel')
+        ->whereHas('roomType', function($query) use ($hotelId) {
+            $query->where('hotel_id', $hotelId);
+        })
+        ->where('room_type_id', $roomTypeId)
+        ->where('id', $roomId)
+        ->firstOrFail();
+
+    return $this->success($room, "Room retrieved successfully", 200);
     }
 
     public function indexByRoomTypeId(Request $request, RoomFilter $filters)
@@ -122,7 +142,7 @@ class RoomController extends Controller
 
         $validate = $request->validate([
             "room_type_id" => "sometimes|exists:room_types,id",
-            "room_number" => "sometimes|string|max:50|unique:rooms,room_number,".$room->id,
+            "room_number" => "sometimes|string|max:50|unique:rooms,room_number," . $room->id,
             "floor" => "nullable|string|max:50",
             "status" => "sometimes|in:available,occupied,maintenance",
             "is_active" => "boolean"

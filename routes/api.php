@@ -9,6 +9,7 @@ use App\Http\Controllers\RoomController;
 use App\Http\Controllers\RoomTypeController;
 use App\Http\Controllers\Data\BedTypeController;
 use App\Http\Controllers\Data\Hotel\Facility\FacilityController;
+use App\Http\Controllers\Data\Hotel\Facility\HotelFacilityController;
 use App\Http\Controllers\Data\Room\Facility\RoomFacilityController;
 use App\Http\Controllers\MidtransController;
 use App\Http\Controllers\ReservationPaymentController;
@@ -37,6 +38,14 @@ Route::prefix('/references')->group(function () {
 Route::middleware(['auth:sanctum', 'check.hotel.staff', 'role:hotel'])->group(function () {
     //Dashboard
     Route::get('hotel/{hotel_id}/dashboard', [HotelController::class, 'dashboard']);
+    // Route::get('hotel/{hotel_id}', [HotelController::class, 'show']);
+    Route::put('hotel/{hotel_id}/edit', [HotelController::class, 'update']);
+    // Route::apiResource('hotel-facilities', FacilityController::class);
+
+    //facilities
+    Route::get('hotel/{hotel_id}/facilities', [HotelFacilityController::class, 'indexByHotelId']);
+    Route::post('hotel/{hotel_id}/facilities', [HotelFacilityController::class, 'storeForHotel']);
+    Route::delete('hotel/{hotel_id}/facilities/{facility_id}', [HotelFacilityController::class, 'detachFromHotel']);
 
     //Room Type Management
     Route::get('hotel/{hotel_id}/room-types', [RoomTypeController::class, 'indexByHotelId']);
@@ -49,6 +58,7 @@ Route::middleware(['auth:sanctum', 'check.hotel.staff', 'role:hotel'])->group(fu
     Route::get('hotel/{hotel_id}/rooms', [RoomController::class, 'indexByHotelId']);
     Route::get('hotel/{hotel_id}/room-type/{room_type_id}/rooms', [RoomController::class, 'indexByRoomTypeId']);
     Route::post('hotel/{hotel_id}/rooms', [RoomController::class, 'store']);
+    Route::get('hotel/{hotel_id}/room-type/{room_type_id}/rooms/{room_id}', [RoomController::class, 'showByRoomTypeId']);
     // Route::post('hotel/{hotel_id}/room-types', [RoomTypeController::class, 'storeByHotelId']);
     // Route::put('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'updateByHotelId']);
     // Route::delete('hotel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'destroyByHotelId']);
@@ -90,8 +100,9 @@ Route::get('hotel/{hotel_id}/reservations/{reservation_id}', [RoomReservationCon
 //     return response('OK', 200);
 // });
 
+
 Route::patch('rooms/{id}/toggle-status', [RoomController::class, 'toggleStatus']);
-Route::apiResource('hotel-facilities', FacilityController::class);
+Route::apiResource('hotel-facilities', HotelFacilityController::class);
 Route::apiResource('room-facilities', RoomFacilityController::class);
 Route::apiResource('hotels', HotelController::class);
 Route::apiResource('bed-types', BedTypeController::class);
@@ -104,7 +115,7 @@ Route::get('/reservations', [RoomReservationController::class, 'index']);
 Route::post('/reservations', [RoomReservationController::class, 'store']);
 Route::post('/reservations/{id}/cancel', [RoomReservationController::class, 'cancel']);
 Route::post('/reservations/{id}/check-in', [CheckInController::class, 'checkIn']);
-Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkout']);
+Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkOut']);
 
 Route::post('/midtrans/callback', [ReservationPaymentController::class, 'midtransCallback'])->name('midtrans.callback');
 
