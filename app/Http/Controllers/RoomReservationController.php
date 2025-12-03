@@ -321,4 +321,16 @@ class RoomReservationController extends Controller
             abort(422, 'Room is not available for the selected dates.');
         }
     }
+
+    //reservation by user ID
+    public function reservationByUserId()
+    {
+        $id = Auth::id();
+        $reservations = RoomReservation::where('user_id', $id)->get();
+        return $this->success(
+            $reservations,
+            "Daftar reservasi user berhasil diambil",
+            200
+        );
+    }
 }
