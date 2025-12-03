@@ -101,6 +101,7 @@ Route::apiResource('users', UserController::class);
 
 //Reservations Status
 Route::get('/reservations', [RoomReservationController::class, 'index']);
+Route::post('/reservations', [RoomReservationController::class, 'store']);
 Route::post('/reservations/{id}/cancel', [RoomReservationController::class, 'cancel']);
 Route::post('/reservations/{id}/check-in', [CheckInController::class, 'checkIn']);
 Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkout']);
