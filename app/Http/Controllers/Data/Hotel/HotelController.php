@@ -24,7 +24,6 @@ class HotelController extends Controller
     use ApiResponses;
 
     // app/Http/Controllers/HotelController.php
-
     public function dashboard(Request $request)
     {
         $hotelId = $request->route('hotel_id');
@@ -264,10 +263,10 @@ class HotelController extends Controller
             ->take(10)
             ->get()
             ->map(fn($r) => [
-                'action'      => 'Booking',
-                // 'description' => $r->customer?->name . ' memesan ' . $r->room?->roomType?->name,
-                'time'        => $r->created_at->diffForHumans(),
-                'badge'       => $r->status ?? 'pending'
+                'action'      => 'Reservation',
+                'description' => 'Tamu' . $r->guest_name . ' memesan ' . $r->room?->roomType?->name,
+                'time' => $r->created_at->translatedFormat('l, j F Y'),
+                'badge'       => $r->reservation_status ?? 'pending'
             ])->toArray();
     }
 
