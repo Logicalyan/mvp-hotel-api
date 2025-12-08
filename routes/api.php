@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\CheckInController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Data\Hotel\HotelController;
 use App\Http\Controllers\Data\Hotel\Reference\ReferenceController;
 use App\Http\Controllers\RoomController;
@@ -124,6 +125,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Route::post('reservations/{id}/pay-remaining', [ReservationController::class, 'payRemaining']);
     // Route::middleware(['role:admin'])->group(function () {});
     Route::post('/user/reservations/{id}/midtrans/token', [MidtransController::class, 'createUserSnapToken']);
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 });
 
 Route::controller(AuthController::class)->group(function () {
@@ -131,4 +133,8 @@ Route::controller(AuthController::class)->group(function () {
     Route::post('/login', 'login');
     Route::get('/user', 'profile')->middleware('auth:sanctum');
     Route::post('/logout', 'logout')->middleware('auth:sanctum');
+
+    Route::post('/reset-password-request', 'resetPasswordRequest');
+    Route::post('/verify-otp', 'verifyOTP');
+    Route::post('/reset-password', 'resetPassword');
 });
