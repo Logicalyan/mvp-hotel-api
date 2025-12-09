@@ -170,6 +170,7 @@ class RoomReservationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'user_id'           => 'nullable|exists:users,id',
             'room_id'           => 'required|exists:rooms,id',
             'guest_name'        => 'required|string|max:255',
             'guest_phone'       => 'required|string|max:50',
@@ -193,7 +194,7 @@ class RoomReservationController extends Controller
         // }
 
         try {
-            $reservation = $this->service->createReservation($data);
+            $reservation = $this->service->createReservationUser($data);
 
             return response()->json([
                 'success'     => true,
@@ -320,5 +321,17 @@ class RoomReservationController extends Controller
         if ($conflicts) {
             abort(422, 'Room is not available for the selected dates.');
         }
+    }
+
+    //reservation by user ID
+    public function reservationByUserId()
+    {
+        $id = Auth::id();
+        $reservations = RoomReservation::where('user_id', $id)->get();
+        return $this->success(
+            $reservations,
+            "Daftar reservasi user berhasil diambil",
+            200
+        );
     }
 }

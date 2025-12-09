@@ -125,7 +125,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Route::post('reservations/{id}/pay-remaining', [ReservationController::class, 'payRemaining']);
     // Route::middleware(['role:admin'])->group(function () {});
     Route::post('/user/reservations/{id}/midtrans/token', [MidtransController::class, 'createUserSnapToken']);
-    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/user/reservations', [RoomReservationController::class, 'reservationByUserId']);
+    Route::post('/reservations/user', [RoomReservationController::class, 'store']);
+
 });
 
 Route::controller(AuthController::class)->group(function () {
