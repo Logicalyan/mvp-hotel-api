@@ -112,7 +112,6 @@ Route::apiResource('users', UserController::class);
 
 //Reservations Status
 Route::get('/reservations', [RoomReservationController::class, 'index']);
-Route::post('/reservations', [RoomReservationController::class, 'store']);
 Route::post('/reservations/{id}/cancel', [RoomReservationController::class, 'cancel']);
 Route::post('/reservations/{id}/check-in', [CheckInController::class, 'checkIn']);
 Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkOut']);
@@ -120,13 +119,14 @@ Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkOu
 Route::post('/midtrans/callback', [ReservationPaymentController::class, 'midtransCallback'])->name('midtrans.callback');
 
 Route::middleware(['auth:sanctum'])->group(function () {
-
+    
     // Route::apiResource('reservations', ReservationController::class);
     // Route::post('reservations/{id}/pay-remaining', [ReservationController::class, 'payRemaining']);
     // Route::middleware(['role:admin'])->group(function () {});
     Route::post('/user/reservations/{id}/midtrans/token', [MidtransController::class, 'createUserSnapToken']);
     Route::get('/user/reservations', [RoomReservationController::class, 'reservationByUserId']);
-
+    Route::post('/reservations/user', [RoomReservationController::class, 'store']);
+    
 });
 
 Route::controller(AuthController::class)->group(function () {
