@@ -36,6 +36,44 @@ class RoomReservationService
         }
     }
 
+    /**
+     * AUTO-SELECT ROOM YANG TERSEDIA BERDASARKAN ROOM TYPE
+     */
+    private function findAvailableRoom($roomTypeId, $checkIn, $checkOut)
+    {
+        // Ambil semua room dengan room_type_id yang diminta
+        $rooms = Room::where('room_type_id', $roomTypeId)
+            ->where('status', 'available')
+            ->get();
+
+        if ($rooms->isEmpty()) {
+            abort(422, 'No rooms available for this room type.');
+        }
+
+        // Cari room yang tidak bentrok dengan reservasi existing
+        foreach ($rooms as $room) {
+            $hasConflict = RoomReservation::where('room_id', $room->id)
+                ->where('reservation_status', '!=', 'cancelled')
+                ->where(function ($query) use ($checkIn, $checkOut) {
+                    $query->whereBetween('check_in_date', [$checkIn, $checkOut])
+                        ->orWhereBetween('check_out_date', [$checkIn, $checkOut])
+                        ->orWhere(function ($q) use ($checkIn, $checkOut) {
+                            $q->where('check_in_date', '<=', $checkIn)
+                                ->where('check_out_date', '>=', $checkOut);
+                        });
+                })
+                ->exists();
+
+            // Jika tidak ada konflik, return room ini
+            if (!$hasConflict) {
+                return $room;
+            }
+        }
+
+        // Jika semua room bentrok
+        abort(422, 'No available rooms for the selected dates.');
+    }
+
 
     /**
      * HITUNG HARGA
@@ -106,23 +144,34 @@ class RoomReservationService
         return DB::transaction(function () use ($data) {
 
             /**
-             * 1. Get room & type
+             * 1. Jika room_id tidak ada, auto-select berdasarkan room_type_id
              */
-            $room = Room::with('roomType')->findOrFail($data['room_id']);
+            if (empty($data['room_id'])) {
+                if (empty($data['room_type_id'])) {
+                    abort(422, 'Either room_id or room_type_id is required.');
+                }
+
+                $room = $this->findAvailableRoom(
+                    $data['room_type_id'],
+                    $data['check_in_date'],
+                    $data['check_out_date']
+                );
+            } else {
+                // Jika room_id sudah ada, ambil room tersebut
+                $room = Room::with('roomType')->findOrFail($data['room_id']);
+                
+                // CEK KAMAR TERSEDIA
+                $this->checkRoomAvailability(
+                    $room->id,
+                    $data['check_in_date'],
+                    $data['check_out_date']
+                );
+            }
+
             $roomTypeId = $room->room_type_id;
 
             /**
-             * 2. CEK KAMAR TERSEDIA
-             *    Mandatory sebelum membuat reservasi
-             */
-            $this->checkRoomAvailability(
-                $room->id,
-                $data['check_in_date'],
-                $data['check_out_date']
-            );
-
-            /**
-             * 3. Hitung harga
+             * 2. Hitung harga
              */
             $calc = $this->calculatePrice(
                 $roomTypeId,
@@ -130,14 +179,10 @@ class RoomReservationService
                 $data['check_out_date']
             );
 
-            // $paymentDue = Carbon::parse($data['check_in_date'])
-            //         ->subDay()
-            //         ->setTime(23, 59, 59);
-
             $paymentDue = Carbon::now()->addMinutes(30);
 
             /**
-             * 4. Gabungkan jam planned check in/out
+             * 3. Gabungkan jam planned check in/out
              */
             $checkInDate  = Carbon::parse($data['check_in_date']);
             $checkOutDate = Carbon::parse($data['check_out_date']);
@@ -151,7 +196,7 @@ class RoomReservationService
                 : $checkOutDate->copy()->setTime(12, 0);
 
             /**
-             * 5. Buat reservasi
+             * 4. Buat reservasi
              */
             $reservation = RoomReservation::create([
                 'room_type_id'      => $roomTypeId,
@@ -177,7 +222,7 @@ class RoomReservationService
             ]);
 
             /**
-             * 6. Insert nightly prices breakdown
+             * 5. Insert nightly prices breakdown
              */
             foreach ($calc['breakdown'] as $item) {
                 RoomReservationPrice::create([
@@ -200,23 +245,34 @@ class RoomReservationService
         return DB::transaction(function () use ($data) {
 
             /**
-             * 1. Get room & type
+             * 1. Jika room_id tidak ada, auto-select berdasarkan room_type_id
              */
-            $room = Room::with('roomType')->findOrFail($data['room_id']);
+            if (empty($data['room_id'])) {
+                if (empty($data['room_type_id'])) {
+                    abort(422, 'Either room_id or room_type_id is required.');
+                }
+
+                $room = $this->findAvailableRoom(
+                    $data['room_type_id'],
+                    $data['check_in_date'],
+                    $data['check_out_date']
+                );
+            } else {
+                // Jika room_id sudah ada, ambil room tersebut
+                $room = Room::with('roomType')->findOrFail($data['room_id']);
+                
+                // CEK KAMAR TERSEDIA
+                $this->checkRoomAvailability(
+                    $room->id,
+                    $data['check_in_date'],
+                    $data['check_out_date']
+                );
+            }
+
             $roomTypeId = $room->room_type_id;
 
             /**
-             * 2. CEK KAMAR TERSEDIA
-             *    Mandatory sebelum membuat reservasi
-             */
-            $this->checkRoomAvailability(
-                $room->id,
-                $data['check_in_date'],
-                $data['check_out_date']
-            );
-
-            /**
-             * 3. Hitung harga
+             * 2. Hitung harga
              */
             $calc = $this->calculatePrice(
                 $roomTypeId,
@@ -224,14 +280,10 @@ class RoomReservationService
                 $data['check_out_date']
             );
 
-            // $paymentDue = Carbon::parse($data['check_in_date'])
-            //         ->subDay()
-            //         ->setTime(23, 59, 59);
-
             $paymentDue = Carbon::now()->addMinutes(30);
 
             /**
-             * 4. Gabungkan jam planned check in/out
+             * 3. Gabungkan jam planned check in/out
              */
             $checkInDate  = Carbon::parse($data['check_in_date']);
             $checkOutDate = Carbon::parse($data['check_out_date']);
@@ -255,7 +307,7 @@ class RoomReservationService
             }
 
             /**
-             * 5. Buat reservasi
+             * 4. Buat reservasi
              */
             $reservation = RoomReservation::create([
                 'user_id'           => $user,
@@ -282,7 +334,7 @@ class RoomReservationService
             ]);
 
             /**
-             * 6. Insert nightly prices breakdown
+             * 5. Insert nightly prices breakdown
              */
             foreach ($calc['breakdown'] as $item) {
                 RoomReservationPrice::create([

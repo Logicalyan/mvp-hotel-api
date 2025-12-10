@@ -170,8 +170,8 @@ class RoomReservationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'user_id'           => 'nullable|exists:users,id',
-            'room_id'           => 'required|exists:rooms,id',
+             'room_type_id' => 'required_without:room_id|exists:room_types,id',
+    'room_id' => 'required_without:room_type_id|exists:rooms,id',
             'guest_name'        => 'required|string|max:255',
             'guest_phone'       => 'required|string|max:50',
             'guest_email'       => 'nullable|email|max:255',
@@ -182,7 +182,6 @@ class RoomReservationController extends Controller
         ]);
 
         // Check room availability
-        $room = Room::findOrFail($validated['room_id']);
 
         // Optional: Add availability check logic here
         // $this->checkRoomAvailability($room->id, $validated['check_in_date'], $validated['check_out_date']);

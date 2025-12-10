@@ -110,6 +110,9 @@ Route::apiResource('bed-types', BedTypeController::class);
 Route::apiResource('room-types', RoomTypeController::class);
 Route::apiResource('rooms', RoomController::class);
 Route::apiResource('users', UserController::class);
+Route::get('hostel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::class, 'showByHotelId']);
+    Route::get('hostel/{hotel_id}/room-types', [RoomTypeController::class, 'indexByHotelId']);
+
 
 //Reservations Status
 Route::get('/reservations', [RoomReservationController::class, 'index']);
