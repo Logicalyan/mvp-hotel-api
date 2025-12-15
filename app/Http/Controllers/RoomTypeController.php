@@ -30,28 +30,46 @@ class RoomTypeController extends Controller
 
     public function indexByHotelId(Request $request, RoomTypeFilter $filters)
     {
-        // Ambil hotel_id dari route parameter
         $hotelId = $request->route('hotel_id');
-
-        // Validasi hotel exists (auto 404 kalau gak ada)
         Hotel::findOrFail($hotelId);
 
-        // Base query dengan filter hotel_id
+        $checkIn  = $request->get('start_date');
+        $checkOut = $request->get('end_date');
+
         $baseQuery = RoomType::query()
             ->where('hotel_id', $hotelId)
-            ->with(['hotel', 'facilities', 'images', 'beds.bedType', 'prices']);
+            ->with([
+                'hotel',
+                'facilities',
+                'images',
+                'beds.bedType',
+                'prices',
+            ])
+            ->when($checkIn && $checkOut, function ($q) use ($checkIn, $checkOut) {
+                $q->withCount([
+                    'rooms as available_rooms_count' => function ($rq) use ($checkIn, $checkOut) {
+                        $rq->where('is_active', 1)
+                            ->where('status', 'available')
+                            ->whereDoesntHave('reservations', function ($res) use ($checkIn, $checkOut) {
+                                $res->active()
+                                    ->where('check_in_date', '<', $checkOut)
+                                    ->where('check_out_date', '>', $checkIn);
+                            });
+                    }
+                ]);
+            });
 
-        // Apply filters (capacity, price range, dll)
         $query = $filters->apply($baseQuery);
 
-        // Pagination
-        $perPage = request()->get('per_page', 10);
-        $perPage = min(max((int) $perPage, 1), 100);
+        $perPage = min(max((int) $request->get('per_page', 10), 1), 100);
 
-        $roomTypes = $query->paginate($perPage);
-
-        return $this->success($roomTypes, "Room types for hotel retrieved successfully", 200);
+        return $this->success(
+            $query->paginate($perPage),
+            "Room types for hotel retrieved successfully",
+            200
+        );
     }
+
 
     public function store(Request $request)
     {

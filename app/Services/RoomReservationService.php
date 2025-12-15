@@ -144,23 +144,41 @@ class RoomReservationService
         return DB::transaction(function () use ($data) {
 
             /**
-             * 1. Jika room_id tidak ada, auto-select berdasarkan room_type_id
+             * 1. VALIDASI & CEK AVAILABILITY
              */
+            if (empty($data['room_id']) && empty($data['room_type_id'])) {
+                abort(422, 'Either room_id or room_type_id is required.');
+            }
+
+            // ============================
+            // CASE 1: ROOM TYPE (AUTO PICK)
+            // ============================
             if (empty($data['room_id'])) {
-                if (empty($data['room_type_id'])) {
-                    abort(422, 'Either room_id or room_type_id is required.');
+
+                $availableCount = $this->countAvailableRooms(
+                    $data['room_type_id'],
+                    $data['check_in_date'],
+                    $data['check_out_date']
+                );
+
+                if ($availableCount === 0) {
+                    abort(422, 'No available rooms for the selected dates.');
                 }
 
+                // auto-select room yang benar-benar available
                 $room = $this->findAvailableRoom(
                     $data['room_type_id'],
                     $data['check_in_date'],
                     $data['check_out_date']
                 );
-            } else {
-                // Jika room_id sudah ada, ambil room tersebut
+            }
+            // ============================
+            // CASE 2: ROOM ID LANGSUNG
+            // ============================
+            else {
                 $room = Room::with('roomType')->findOrFail($data['room_id']);
-                
-                // CEK KAMAR TERSEDIA
+
+                // cek ketersediaan room ini
                 $this->checkRoomAvailability(
                     $room->id,
                     $data['check_in_date'],
@@ -171,7 +189,7 @@ class RoomReservationService
             $roomTypeId = $room->room_type_id;
 
             /**
-             * 2. Hitung harga
+             * 2. HITUNG HARGA
              */
             $calc = $this->calculatePrice(
                 $roomTypeId,
@@ -179,10 +197,10 @@ class RoomReservationService
                 $data['check_out_date']
             );
 
-            $paymentDue = Carbon::now()->addMinutes(30);
+            $paymentDue = Carbon::now()->addMinutes(1);
 
             /**
-             * 3. Gabungkan jam planned check in/out
+             * 3. PLANNED CHECK IN / OUT
              */
             $checkInDate  = Carbon::parse($data['check_in_date']);
             $checkOutDate = Carbon::parse($data['check_out_date']);
@@ -196,33 +214,33 @@ class RoomReservationService
                 : $checkOutDate->copy()->setTime(12, 0);
 
             /**
-             * 4. Buat reservasi
+             * 4. CREATE RESERVATION
              */
             $reservation = RoomReservation::create([
-                'room_type_id'      => $roomTypeId,
-                'room_id'           => $room->id,
-                'reservation_code'  => $this->generateCode(),
+                'room_type_id'       => $roomTypeId,
+                'room_id'            => $room->id,
+                'reservation_code'   => $this->generateCode(),
 
-                'check_in_date'     => $data['check_in_date'],
-                'check_out_date'    => $data['check_out_date'],
-                'nights'            => $calc['nights'],
+                'check_in_date'      => $data['check_in_date'],
+                'check_out_date'     => $data['check_out_date'],
+                'nights'             => $calc['nights'],
 
-                'planned_check_in'  => $plannedCheckIn,
-                'planned_check_out' => $plannedCheckOut,
+                'planned_check_in'   => $plannedCheckIn,
+                'planned_check_out'  => $plannedCheckOut,
 
-                'guest_name'        => $data['guest_name'],
-                'guest_phone'       => $data['guest_phone'],
-                'guest_email'       => $data['guest_email'] ?? null,
+                'guest_name'         => $data['guest_name'],
+                'guest_phone'        => $data['guest_phone'],
+                'guest_email'        => $data['guest_email'] ?? null,
 
-                'total_price'       => $calc['total_price'],
-                'payment_status'    => 'pending',
+                'total_price'        => $calc['total_price'],
+                'payment_status'     => 'pending',
                 'reservation_status' => 'booked',
 
-                'payment_due_at'    => $paymentDue
+                'payment_due_at'     => $paymentDue
             ]);
 
             /**
-             * 5. Insert nightly prices breakdown
+             * 5. NIGHTLY PRICE BREAKDOWN
              */
             foreach ($calc['breakdown'] as $item) {
                 RoomReservationPrice::create([
@@ -239,6 +257,7 @@ class RoomReservationService
             return $reservation;
         });
     }
+
 
     public function createReservationUser(array $data)
     {
@@ -260,7 +279,7 @@ class RoomReservationService
             } else {
                 // Jika room_id sudah ada, ambil room tersebut
                 $room = Room::with('roomType')->findOrFail($data['room_id']);
-                
+
                 // CEK KAMAR TERSEDIA
                 $this->checkRoomAvailability(
                     $room->id,
@@ -303,7 +322,7 @@ class RoomReservationService
 
             if (!$user) {
                 // kalau user_id ada di request, ambil
-                $user = $data['user_id'] ;
+                $user = $data['user_id'];
             }
 
             /**
@@ -351,6 +370,36 @@ class RoomReservationService
             return $reservation;
         });
     }
+
+    public function countAvailableRooms($roomTypeId, $checkIn, $checkOut): int
+    {
+        $rooms = Room::where('room_type_id', $roomTypeId)
+            ->where('status', 'available')
+            ->get();
+
+        $availableCount = 0;
+
+        foreach ($rooms as $room) {
+            $hasConflict = RoomReservation::where('room_id', $room->id)
+                ->where('reservation_status', '!=', 'cancelled')
+                ->where(function ($query) use ($checkIn, $checkOut) {
+                    $query->whereBetween('check_in_date', [$checkIn, $checkOut])
+                        ->orWhereBetween('check_out_date', [$checkIn, $checkOut])
+                        ->orWhere(function ($q) use ($checkIn, $checkOut) {
+                            $q->where('check_in_date', '<=', $checkIn)
+                                ->where('check_out_date', '>=', $checkOut);
+                        });
+                })
+                ->exists();
+
+            if (!$hasConflict) {
+                $availableCount++;
+            }
+        }
+
+        return $availableCount;
+    }
+
 
 
     private function generateCode(): string

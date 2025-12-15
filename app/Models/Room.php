@@ -21,4 +21,10 @@ class Room extends Model
     {
         return $this->belongsTo(RoomType::class);
     }
+
+    // App\Models\Room.php
+    public function reservations()
+    {
+        return $this->hasMany(RoomReservation::class);
+    }
 }

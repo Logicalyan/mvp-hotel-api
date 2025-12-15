@@ -383,7 +383,7 @@ class HotelController extends Controller
     public function index(HotelFilter $filters)
     {
 
-        $baseQuery = Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict']);
+        $baseQuery = Hotel::query()->with(['images', 'facilities', 'province', 'city', 'district', 'subDistrict', 'roomTypes.prices']);
 
         $query = $filters->apply($baseQuery);
 

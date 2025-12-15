@@ -34,19 +34,19 @@ Route::get('/reservations/{id}', function($id) {
             'room',
             'user'
         ])->find($id);
-        
+
         if (!$reservation) {
             return response()->json([
                 'success' => false,
                 'message' => 'Reservation not found'
             ], 404);
         }
-        
+
         return response()->json([
             'success' => true,
             'data' => $reservation
         ], 200);
-        
+
     } catch (\Exception $e) {
         return response()->json([
             'success' => false,
@@ -107,33 +107,6 @@ Route::middleware(['auth:sanctum', 'check.hotel.staff', 'role:hotel'])->group(fu
 
 Route::get('hotel/{hotel_id}/reservations/{reservation_id}', [RoomReservationController::class, 'showByHotelId']);
 
-
-// routes/web.php atau api.php
-// Route::post('/midtrans/webhook', function (Request $request) {
-//     $serverKey = config('services.midtrans.server_key');
-//     $hashed = hash('sha512', $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
-
-//     if ($hashed !== $request->signature_key) {
-//         return response('Invalid signature', 403);
-//     }
-
-//     $orderId = $request->order_id;
-//     $status = $request->transaction_status;
-
-//     $reservation = RoomReservation::where('reservation_code', $orderId)->first();
-
-//     if (!$reservation) return response('Reservation not found', 404);
-
-//     if ($status == 'capture' || $status == 'settlement') {
-//         $reservation->update(['payment_status' => 'paid']);
-//     } elseif ($status == 'deny' || $status == 'cancel' || $status == 'expire') {
-//         $reservation->update(['payment_status' => 'pending']);
-//     }
-
-//     return response('OK', 200);
-// });
-
-
 Route::patch('rooms/{id}/toggle-status', [RoomController::class, 'toggleStatus']);
 Route::apiResource('hotel-facilities', HotelFacilityController::class);
 Route::apiResource('room-facilities', RoomFacilityController::class);
@@ -147,8 +120,10 @@ Route::get('hostel/{hotel_id}/room-types/{room_type_id}', [RoomTypeController::c
 
 
 //Reservations Status
+Route::get('/dashboard', [DashboardController::class, 'index']);
 Route::get('/reservations', [RoomReservationController::class, 'index']);
 Route::post('/reservations/{id}/cancel', [RoomReservationController::class, 'cancel']);
+Route::post('/reservations/{id}/expire', [RoomReservationController::class, 'expire']);
 Route::post('/reservations/{id}/check-in', [CheckInController::class, 'checkIn']);
 Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkOut']);
 

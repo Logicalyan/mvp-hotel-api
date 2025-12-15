@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000','http://localhost:3001', ' https://unforsworn-thuy-cacogenic.ngrok-free.dev'],
+    'allowed_origins' => ['http://localhost:3000','http://localhost:3001', ' https://84e3413e0005.ngrok-free.app/'],
 
     'allowed_origins_patterns' => [],
 

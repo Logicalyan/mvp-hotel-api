@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use App\Services\RoomReservationService;
 use App\Models\Room;
 use App\Models\RoomReservation;
+use App\Models\RoomType;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 class RoomReservationController extends Controller
@@ -22,38 +24,46 @@ class RoomReservationController extends Controller
         $this->service = $service;
     }
 
-    /**
-     * Get reservations by hotel_id
-     * GET /api/hotel/{hotel_id}/reservations
-     */
     public function indexByHotelId(Request $request, ReservationFilter $filters, $hotel_id)
     {
         // 1. Validasi hotel exists
         Hotel::findOrFail($hotel_id);
 
-        // 2. Base query: hanya reservasi dari kamar yang termasuk hotel ini
+        // 🔥 2. AUTO-EXPIRE (JS-driven)
+        RoomReservation::whereHas('room.roomType', function ($q) use ($hotel_id) {
+            $q->where('hotel_id', $hotel_id);
+        })
+            ->whereIn('payment_status', ['pending', 'unpaid'])
+            ->whereNotIn('reservation_status', ['cancelled', 'checked_in'])
+            ->where('payment_due_at', '<', Carbon::now())
+            ->update([
+                'payment_status' => 'expired',
+                'reservation_status' => 'expired',
+                // 'expired_at' => Carbon::now(), // optional
+            ]);
+
+        // 3. Base query
         $baseQuery = RoomReservation::query()
             ->with(['room.roomType'])
             ->whereHas('room.roomType', function ($q) use ($hotel_id) {
                 $q->where('hotel_id', $hotel_id);
             });
 
-        // 3. Apply filters
+        // 4. Apply filters
         $query = $filters->apply($baseQuery);
 
-        // 4. Pagination
-        $perPage = $request->get('per_page', 10);
-        $perPage = min(max((int) $perPage, 1), 100);
-
+        // 5. Pagination
+        $perPage = min(max((int) $request->get('per_page', 10), 1), 100);
         $reservations = $query->paginate($perPage);
 
-        // 5. Response
+        // 6. Response
         return $this->success(
             $reservations,
             "Daftar reservasi hotel berhasil diambil",
             200
         );
     }
+
 
     public function showByHotelId($hotel_id, $reservation_id)
     {
@@ -72,10 +82,11 @@ class RoomReservationController extends Controller
     // RoomReservationController.php
     public function storeByHotelId(Request $request, $hotel_id)
     {
-        Hotel::findOrFail($hotel_id); // validasi hotel exists
+        Hotel::findOrFail($hotel_id);
 
         $validated = $request->validate([
-            'room_id'           => 'required|exists:rooms,id',
+            'room_id'           => 'nullable|exists:rooms,id', // ✅ UBAH jadi nullable
+            'room_type_id'      => 'nullable|exists:room_types,id', // ✅ TAMBAHKAN ini
             'guest_name'        => 'required|string|max:255',
             'guest_phone'       => 'required|string|max:50',
             'guest_email'       => 'nullable|email|max:255',
@@ -83,18 +94,38 @@ class RoomReservationController extends Controller
             'check_out_date'    => 'required|date|after:check_in_date',
             'planned_check_in'  => 'nullable|date_format:H:i',
             'planned_check_out' => 'nullable|date_format:H:i',
+            'payment_due_at' => 'nullable|date_format:H:i',
         ]);
 
-        // Pastikan room milik hotel ini
-        $room = Room::where('id', $validated['room_id'])
-            ->whereHas('roomType', fn($q) => $q->where('hotel_id', $hotel_id))
-            ->firstOrFail();
+        // ✅ VALIDASI: minimal salah satu harus ada
+        if (empty($validated['room_id']) && empty($validated['room_type_id'])) {
+            return $this->error('Either room_id or room_type_id is required', 422);
+        }
 
-        $data = $validated;
-        $data['room_id'] = $room->id;
+        // ✅ VALIDASI: jika room_id ada, pastikan milik hotel ini
+        if (!empty($validated['room_id'])) {
+            $room = Room::where('id', $validated['room_id'])
+                ->whereHas('roomType', fn($q) => $q->where('hotel_id', $hotel_id))
+                ->first();
+
+            if (!$room) {
+                return $this->error('Room not found in this hotel', 404);
+            }
+        }
+
+        // ✅ VALIDASI: jika room_type_id ada, pastikan milik hotel ini
+        if (!empty($validated['room_type_id'])) {
+            $roomType = RoomType::where('id', $validated['room_type_id'])
+                ->where('hotel_id', $hotel_id)
+                ->first();
+
+            if (!$roomType) {
+                return $this->error('Room type not found in this hotel', 404);
+            }
+        }
 
         try {
-            $reservation = $this->service->createReservation($data);
+            $reservation = $this->service->createReservation($validated);
 
             return $this->success(
                 $reservation->load(['room.roomType', 'prices']),
@@ -102,7 +133,7 @@ class RoomReservationController extends Controller
                 201
             );
         } catch (\Exception $e) {
-            return $this->error("Gagal membuat reservasi: " . $e->getMessage(), 500);
+            return $this->error("Gagal membuat reservasi: " . $e->getMessage(), 422);
         }
     }
 
@@ -170,8 +201,8 @@ class RoomReservationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-             'room_type_id' => 'required_without:room_id|exists:room_types,id',
-    'room_id' => 'required_without:room_type_id|exists:rooms,id',
+            'room_type_id' => 'required_without:room_id|exists:room_types,id',
+            'room_id' => 'required_without:room_type_id|exists:rooms,id',
             'guest_name'        => 'required|string|max:255',
             'guest_phone'       => 'required|string|max:50',
             'guest_email'       => 'nullable|email|max:255',
@@ -212,24 +243,23 @@ class RoomReservationController extends Controller
      * Display the specified reservation
      */
     public function show($id)
-{
-    try {
-        $reservation = RoomReservation::with([
-            'user',
-            'roomType' => function($query) {
-                $query->with(['hotel', 'facilities', 'images', 'prices']);
-            },
-            'room'
-        ])->findOrFail($id);
+    {
+        try {
+            $reservation = RoomReservation::with([
+                'user',
+                'roomType' => function ($query) {
+                    $query->with(['hotel', 'facilities', 'images', 'prices']);
+                },
+                'room'
+            ])->findOrFail($id);
 
-        return $this->success($reservation, "Reservation found successfully", 200);
-        
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-        return $this->error("Reservation not found", 404);
-    } catch (\Exception $e) {
-        return $this->error("Failed to fetch reservation: " . $e->getMessage(), 500);
+            return $this->success($reservation, "Reservation found successfully", 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->error("Reservation not found", 404);
+        } catch (\Exception $e) {
+            return $this->error("Failed to fetch reservation: " . $e->getMessage(), 500);
+        }
     }
-}
 
     /**
      * Update reservation status
@@ -303,6 +333,52 @@ class RoomReservationController extends Controller
         return $this->success($reservation, "Cancelled Reservation Successfully");
     }
 
+    /**
+     * Expire reservation (AUTO / MANUAL)
+     */
+    public function expire($id)
+    {
+        $reservation = RoomReservation::findOrFail($id);
+
+        // 1. Tidak boleh expire jika sudah selesai / dibatalkan
+        if (in_array($reservation->reservation_status, [
+            'checked_out',
+            'cancelled',
+            'expired'
+        ])) {
+            return $this->error("Reservation cannot be expired.", 422);
+        }
+
+        // 2. Tidak boleh expire jika sudah dibayar
+        if ($reservation->payment_status === 'paid') {
+            return $this->error("Paid reservation cannot be expired.", 422);
+        }
+
+        // 3. Cek waktu expired
+        if (
+            !$reservation->payment_due_at ||
+            $reservation->payment_due_at->isFuture()
+        ) {
+            return $this->error("Reservation is not expired yet.", 422);
+        }
+
+        // 4. Release room
+        Room::where('id', $reservation->room_id)->update([
+            'status' => 'available'
+        ]);
+
+        // 5. Update reservation
+        $reservation->update([
+            'payment_status'     => 'expired',
+            'reservation_status' => 'expired',
+            // 'expired_at'         => now(),
+        ]);
+
+        return $this->success(
+            $reservation,
+            "Reservation expired successfully"
+        );
+    }
 
     /**
      * Check room availability for given dates

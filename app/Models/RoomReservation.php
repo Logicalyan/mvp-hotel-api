@@ -37,11 +37,13 @@ class RoomReservation extends Model
         'total_price',
         'payment_status',
         'reservation_status',
+        'payment_due_at',
     ];
 
     protected $casts = [
         'check_in_date' => 'date',
         'check_out_date' => 'date',
+        'payment_due_at' => 'datetime',
         'planned_check_in' => 'datetime',
         'planned_check_out' => 'datetime',
         'actual_check_in' => 'datetime',
@@ -137,10 +139,19 @@ class RoomReservation extends Model
         return $query->where('payment_status', 'paid');
     }
 
-    public function scopeActive($query)
+    public function scopeActive($q)
     {
-        return $query->where('reservation_status', 'booked');
+        return $q
+            ->whereNotIn('reservation_status', ['cancelled'])
+            ->where(function ($q) {
+                $q->where('payment_status', 'paid')
+                    ->orWhere(function ($q) {
+                        $q->where('payment_status', 'pending')
+                            ->where('payment_due_at', '>', now());
+                    });
+            });
     }
+
 
     public function scopeByRoom($query, $roomId)
     {
