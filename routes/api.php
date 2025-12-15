@@ -23,6 +23,38 @@ use Illuminate\Http\Request;
 // use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// routes/api.php - TARUH DI PALING ATAS, SEBELUM SEMUA ROUTE LAIN
+
+Route::get('/reservations/{id}', function($id) {
+    try {
+        $reservation = \App\Models\RoomReservation::with([
+            'roomType' => function($q) {
+                $q->with(['hotel', 'facilities', 'images', 'prices']);
+            },
+            'room',
+            'user'
+        ])->find($id);
+        
+        if (!$reservation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Reservation not found'
+            ], 404);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $reservation
+        ], 200);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});
+
 Route::prefix('/references')->group(function () {
     Route::get('/provinces', [ReferenceController::class, 'provinces']);
     Route::get('/cities', [ReferenceController::class, 'cities']);
@@ -73,7 +105,7 @@ Route::middleware(['auth:sanctum', 'check.hotel.staff', 'role:hotel'])->group(fu
     Route::post('hotel/{hotel_id}/reservations/{reservation_id}/midtrans/token', [MidtransController::class, 'createSnapToken']);
 });
 
-Route::get('hotel/{hotel_id}/reservations/{reservation_id}', [RoomReservationController::class, 'showByHotelId'])->name('reservation.detail');
+Route::get('hotel/{hotel_id}/reservations/{reservation_id}', [RoomReservationController::class, 'showByHotelId']);
 
 
 // routes/web.php atau api.php
@@ -123,7 +155,6 @@ Route::post('/reservations/{id}/check-out', [CheckoutController::class, 'checkOu
 Route::post('/midtrans/callback', [ReservationPaymentController::class, 'midtransCallback'])->name('midtrans.callback');
 
 Route::middleware(['auth:sanctum'])->group(function () {
-
     // Route::apiResource('reservations', ReservationController::class);
     // Route::post('reservations/{id}/pay-remaining', [ReservationController::class, 'payRemaining']);
     // Route::middleware(['role:admin'])->group(function () {});
@@ -143,3 +174,5 @@ Route::controller(AuthController::class)->group(function () {
     Route::post('/verify-otp', 'verifyOTP');
     Route::post('/reset-password', 'resetPassword');
 });
+
+// Route::get('/reservations/{id}', [RoomReservationController::class, 'show']);

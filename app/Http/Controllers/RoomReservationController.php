@@ -198,7 +198,7 @@ class RoomReservationController extends Controller
             return response()->json([
                 'success'     => true,
                 'message'     => 'Reservation created successfully.',
-                'reservation' => $reservation->load(['room.roomType', 'prices']),
+                'data' => $reservation->load(['room.roomType', 'prices']),
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -212,20 +212,24 @@ class RoomReservationController extends Controller
      * Display the specified reservation
      */
     public function show($id)
-    {
-        $reservation = RoomReservation::with(['room.roomType', 'prices'])
-            ->findOrFail($id);
+{
+    try {
+        $reservation = RoomReservation::with([
+            'user',
+            'roomType' => function($query) {
+                $query->with(['hotel', 'facilities', 'images', 'prices']);
+            },
+            'room'
+        ])->findOrFail($id);
 
-        // Optional: Add authorization check
-        // if (Auth::check() && $reservation->user_id !== Auth::id()) {
-        //     return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        // }
-
-        return response()->json([
-            'success' => true,
-            'data'    => $reservation
-        ]);
+        return $this->success($reservation, "Reservation found successfully", 200);
+        
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        return $this->error("Reservation not found", 404);
+    } catch (\Exception $e) {
+        return $this->error("Failed to fetch reservation: " . $e->getMessage(), 500);
     }
+}
 
     /**
      * Update reservation status
